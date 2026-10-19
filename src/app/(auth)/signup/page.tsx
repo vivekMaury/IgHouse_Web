@@ -19,27 +19,44 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/callback` },
-    });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/callback` },
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+
+      if (data.user && !data.session) {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (!loginError) {
+          router.push("/dashboard");
+          router.refresh();
+          return;
+        }
+      }
+
+      setSuccess(true);
+    } catch (err) {
+      setError((err as Error).message ?? "Something went wrong");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-
-    setSuccess(true);
-    setLoading(false);
   }
 
   async function handleGoogleLogin() {
