@@ -19,6 +19,15 @@ function parseSignedRequest(signedRequest: string, appSecret: string): Record<st
   return JSON.parse(decoded) as Record<string, unknown>;
 }
 
+export async function GET() {
+  return NextResponse.json({
+    service: "IgHouse",
+    endpoint: "Meta Data Deletion Callback",
+    method: "POST",
+    description: "This endpoint receives data deletion requests from Meta. It is not meant to be accessed directly.",
+  });
+}
+
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = await checkRateLimit(`meta-deletion:${ip}`, "api");
@@ -85,7 +94,8 @@ export async function POST(request: Request) {
 
   console.info("[meta-deletion] processed deletion for user:", userId, "accounts:", accountList.length);
 
-  const statusUrl = `${request.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/meta/data-deletion/status?code=${confirmationCode}`;
+  const reqUrl = new URL(request.url);
+  const statusUrl = `${reqUrl.origin}/api/meta/data-deletion/status?code=${confirmationCode}`;
 
   return NextResponse.json({
     url: statusUrl,
