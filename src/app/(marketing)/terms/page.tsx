@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-14 items-center justify-between border-b border-border/60 px-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          IgHouse
+      <header className="flex h-14 items-center justify-between border-b border-white/5 px-6">
+        <Link href="/" className="text-lg font-bold tracking-tight text-white">
+          Ig<span className="text-[#FF007F]">House</span>
         </Link>
       </header>
 
