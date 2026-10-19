@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-const envSchema = z.object({
+const serverSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
@@ -13,16 +13,24 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 });
 
-export type Env = z.infer<typeof envSchema>;
+export type Env = z.infer<typeof serverSchema>;
 
-function validateEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+let _env: Env | null = null;
+
+export function getEnv(): Env {
+  if (_env) return _env;
+  const parsed = serverSchema.safeParse(process.env);
   if (!parsed.success) {
     const formatted = z.prettifyError(parsed.error);
-    console.error("❌ Invalid environment variables:\n", formatted);
+    console.error("Invalid environment variables:\n", formatted);
     throw new Error("Invalid environment variables");
   }
-  return parsed.data;
+  _env = parsed.data;
+  return _env;
 }
 
-export const env = validateEnv();
+export const env = new Proxy({} as Env, {
+  get(_, prop: string) {
+    return getEnv()[prop as keyof Env];
+  },
+});

@@ -42,7 +42,7 @@ export default function HomePage() {
       </main>
 
       <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} IgHouse. All rights reserved.
+        © 2026 IgHouse. All rights reserved.
       </footer>
     </div>
   );
