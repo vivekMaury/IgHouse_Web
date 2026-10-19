@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getInstagramAuthUrl } from "@/lib/meta/instagram";
 import { randomBytes } from "node:crypto";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = await checkRateLimit(`auth:${ip}`, "auth");
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl.remaining, rl.reset) });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

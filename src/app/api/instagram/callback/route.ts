@@ -6,6 +6,7 @@ import {
   getInstagramProfile,
 } from "@/lib/meta/instagram";
 import { encryptToken } from "@/lib/crypto/token";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -97,6 +98,16 @@ export async function GET(request: Request) {
       } as Record<string, unknown>,
       { onConflict: "workspace_id,platform,platform_account_id" }
     );
+
+    await writeAuditLog({
+      workspace_id: storedState.workspaceId,
+      actor_id: user.id,
+      action: "account.connected",
+      entity_type: "connected_account",
+      entity_id: user_id,
+      metadata: { platform: "instagram", username: profile.username },
+      ip_address: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+    });
 
     const response = NextResponse.redirect(
       `${origin}/dashboard/settings?success=instagram_connected`

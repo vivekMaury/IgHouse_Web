@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod/v4";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 const querySchema = z.object({
   filter: z.enum(["all", "unread", "bot_active", "bot_paused"]).default("all"),
@@ -9,6 +10,12 @@ const querySchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = await checkRateLimit(`api:${ip}`, "api");
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl.remaining, rl.reset) });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

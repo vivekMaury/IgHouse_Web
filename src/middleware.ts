@@ -14,8 +14,31 @@ export async function middleware(request: NextRequest) {
     (route) => path === route || path.startsWith("/api/webhooks")
   );
 
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+
+  const cspDirectives = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `style-src 'self' 'nonce-${nonce}'`,
+    "img-src 'self' blob: data: https://*.cdninstagram.com https://*.fbcdn.net",
+    `connect-src 'self' ${supabaseUrl ?? ""} https://*.supabase.co wss://*.supabase.co https://*.sentry.io`,
+    "font-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "upgrade-insecure-requests",
+  ];
+
+  const csp = cspDirectives.join("; ");
+
   if (!supabaseUrl || !supabaseAnonKey) {
-    if (isPublic) return NextResponse.next();
+    if (isPublic) {
+      const res = NextResponse.next();
+      res.headers.set("x-nonce", nonce);
+      res.headers.set("Content-Security-Policy", csp);
+      return res;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -63,6 +86,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
   }
+
+  response.headers.set("x-nonce", nonce);
+  response.headers.set("Content-Security-Policy", csp);
 
   return response;
 }

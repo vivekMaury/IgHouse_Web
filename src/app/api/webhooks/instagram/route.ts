@@ -3,6 +3,7 @@ import { verifyWebhookSignature, verifyGetChallenge } from "@/lib/meta/webhook-v
 import { parseWebhookPayload, type WebhookPayload } from "@/lib/meta/parse-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/lib/inngest/client";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,6 +22,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = await checkRateLimit(`webhook:${ip}`, "webhook");
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl.remaining, rl.reset) });
+  }
+
   const rawBody = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
 
