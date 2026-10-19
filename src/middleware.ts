@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_ROUTES.some(
-    (route) => path === route || path.startsWith("/api/webhooks")
+    (route) => path === route || path.startsWith("/api/webhooks") || path.startsWith("/api/meta/data-deletion")
   );
 
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");

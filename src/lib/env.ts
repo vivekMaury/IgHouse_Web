@@ -12,6 +12,7 @@ const serverSchema = z.object({
   INNGEST_SIGNING_KEY: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  NEXT_PUBLIC_APP_URL: z.url().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.url().optional(),
   SENTRY_DSN: z.url().optional(),
   SENTRY_ORG: z.string().optional(),

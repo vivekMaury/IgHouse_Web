@@ -66,8 +66,10 @@ export default function PrivacyPage() {
             <p className="mt-2">
               We retain your data for as long as your account is active. When you delete your
               account, all associated data (flows, contacts, messages, connected accounts) is
-              permanently deleted within 30 days. You can request data deletion at any time by
-              contacting us.
+              permanently deleted within 30 days. You can request data deletion at any time
+              through your dashboard settings or by contacting us. When you disconnect your
+              Instagram account through Meta&apos;s app settings, we receive a data deletion
+              callback and automatically remove all data associated with that Instagram account.
             </p>
           </section>
 

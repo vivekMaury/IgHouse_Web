@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { InstagramConnectCard } from "./instagram-connect-card";
+import { DangerZone } from "./danger-zone";
 
 export const instant = false;
 
@@ -56,6 +57,8 @@ export default async function SettingsPage() {
       </div>
 
       <InstagramConnectCard accounts={connectedAccounts} />
+
+      <DangerZone />
     </div>
   );
 }
