@@ -14,12 +14,10 @@ export async function middleware(request: NextRequest) {
     (route) => path === route || path.startsWith("/api/webhooks") || path.startsWith("/api/meta/data-deletion")
   );
 
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-
   const cspDirectives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval'`,
+    `style-src 'self' 'unsafe-inline'`,
     "img-src 'self' blob: data: https://*.cdninstagram.com https://*.fbcdn.net",
     `connect-src 'self' ${supabaseUrl ?? ""} https://*.supabase.co wss://*.supabase.co https://*.sentry.io`,
     "font-src 'self'",
@@ -35,7 +33,6 @@ export async function middleware(request: NextRequest) {
   if (!supabaseUrl || !supabaseAnonKey) {
     if (isPublic) {
       const res = NextResponse.next();
-      res.headers.set("x-nonce", nonce);
       res.headers.set("Content-Security-Policy", csp);
       return res;
     }
@@ -87,7 +84,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  response.headers.set("x-nonce", nonce);
   response.headers.set("Content-Security-Policy", csp);
 
   return response;
