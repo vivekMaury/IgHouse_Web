@@ -3,14 +3,22 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/login", "/signup", "/callback"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/login", "/signup", "/callback", "/privacy", "/terms"];
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  const path = request.nextUrl.pathname;
+  const isPublic = PUBLIC_ROUTES.some(
+    (route) => path === route || path.startsWith("/api/webhooks")
+  );
+
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.next();
+    if (isPublic) return NextResponse.next();
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
   let response = NextResponse.next({ request });
@@ -37,11 +45,6 @@ export async function middleware(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const path = request.nextUrl.pathname;
-    const isPublic = PUBLIC_ROUTES.some(
-      (route) => path === route || path.startsWith("/api/webhooks")
-    );
-
     if (!user && !isPublic) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
@@ -54,7 +57,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
   } catch {
-    return NextResponse.next();
+    if (!isPublic) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;

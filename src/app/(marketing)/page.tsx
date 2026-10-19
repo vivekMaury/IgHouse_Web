@@ -41,8 +41,18 @@ export default function HomePage() {
         </div>
       </main>
 
-      <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        © 2026 IgHouse. All rights reserved.
+      <footer className="border-t border-border/60 py-6">
+        <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <span>&copy; 2026 IgHouse</span>
+          <span>&middot;</span>
+          <Link href="/privacy" className="hover:text-foreground transition-colors">
+            Privacy
+          </Link>
+          <span>&middot;</span>
+          <Link href="/terms" className="hover:text-foreground transition-colors">
+            Terms
+          </Link>
+        </div>
       </footer>
     </div>
   );
