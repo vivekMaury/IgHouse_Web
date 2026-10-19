@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx create-next-app@latest ighouse-temp --typescript --tailwind --eslint --app --src-dir --no-git --use-npm --import-alias \"@/*\")",
       "Bash(npm run *)",
-      "Bash(node -e \"const l = require\\('lucide-react'\\); const icons = Object.keys\\(l\\).filter\\(k => k.toLowerCase\\(\\).includes\\('instagram'\\)\\); console.log\\(icons\\);\")"
+      "Bash(node -e \"const l = require\\('lucide-react'\\); const icons = Object.keys\\(l\\).filter\\(k => k.toLowerCase\\(\\).includes\\('instagram'\\)\\); console.log\\(icons\\);\")",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npx next *)"
     ]
   }
 }
