@@ -84,12 +84,10 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
           <p className="text-sm text-muted-foreground">
             Connect your Instagram Business or Creator account to start automating.
           </p>
-          <a href="/api/instagram/connect">
-            <Button>
-              <Camera className="mr-2 h-4 w-4" />
-              Connect Instagram
-            </Button>
-          </a>
+          <Button onClick={() => { window.location.href = "/api/instagram/connect"; }}>
+            <Camera className="mr-2 h-4 w-4" />
+            Connect Instagram
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -150,12 +148,10 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
             );
           })}
 
-          <a href="/api/instagram/connect">
-            <Button variant="outline" size="sm">
-              <Camera className="mr-2 h-4 w-4" />
-              Connect another account
-            </Button>
-          </a>
+          <Button variant="outline" size="sm" onClick={() => { window.location.href = "/api/instagram/connect"; }}>
+            <Camera className="mr-2 h-4 w-4" />
+            Connect another account
+          </Button>
         </div>
       )}
     </div>
