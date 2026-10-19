@@ -3,9 +3,11 @@
 import { createClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export default function SignupPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: `${window.location.origin}/callback` },
@@ -27,6 +29,12 @@ export default function SignupPage() {
     if (error) {
       setError(error.message);
       setLoading(false);
+      return;
+    }
+
+    if (data.session) {
+      router.push("/dashboard");
+      router.refresh();
       return;
     }
 
