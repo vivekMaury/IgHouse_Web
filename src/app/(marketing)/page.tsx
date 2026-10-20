@@ -1047,13 +1047,13 @@ function Footer() {
       links: [
         { label: "Privacy Policy", href: "/privacy" },
         { label: "Terms of Service", href: "/terms" },
-        { label: "Data Deletion", href: "/api/meta/data-deletion" },
+        { label: "Data Deletion", href: "/data-deletion" },
       ],
     },
     {
       title: "Support",
       links: [
-        { label: "Documentation", href: "#" },
+        { label: "Documentation", href: "/docs" },
         { label: "Contact Us", href: "mailto:vivekmaury555@gmail.com" },
       ],
     },

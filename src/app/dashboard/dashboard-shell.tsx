@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   LogOut,
+  Activity,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/flows", label: "Flows", icon: GitBranch },
   { href: "/dashboard/inbox", label: "Inbox", icon: MessageSquare },
   { href: "/dashboard/contacts", label: "Contacts", icon: Users },
+  { href: "/dashboard/logs", label: "Logs", icon: Activity },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
 
