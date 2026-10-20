@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/login", "/signup", "/callback", "/privacy", "/terms"];
+const PUBLIC_ROUTES = ["/", "/pricing", "/login", "/signup", "/callback", "/privacy", "/terms", "/data-deletion", "/docs"];
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
