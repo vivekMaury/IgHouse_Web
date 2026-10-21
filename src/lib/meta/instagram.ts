@@ -11,11 +11,11 @@ const SCOPES = [
 ];
 
 export function getInstagramAuthUrl(redirectUri: string, state: string): string {
-  const appId = process.env.META_APP_ID ?? env.META_APP_ID;
+  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const params = new URLSearchParams({
     enable_fb_login: "0",
     force_authentication: "1",
-    client_id: appId,
+    client_id: igAppId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: SCOPES.join(","),
@@ -28,10 +28,10 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ access_token: string; user_id: string }> {
-  const appId = process.env.META_APP_ID ?? env.META_APP_ID;
+  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const appSecret = process.env.META_APP_SECRET ?? env.META_APP_SECRET;
   const body = new URLSearchParams({
-    client_id: appId,
+    client_id: igAppId,
     client_secret: appSecret,
     grant_type: "authorization_code",
     redirect_uri: redirectUri,

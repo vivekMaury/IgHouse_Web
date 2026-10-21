@@ -37,13 +37,13 @@ export async function GET(request: Request) {
     }
 
     // Validate required env vars before attempting OAuth
-    const appId = process.env.META_APP_ID;
+    const igAppId = process.env.INSTAGRAM_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
 
-    if (!appId || !appSecret) {
-      console.error("Instagram connect: META_APP_ID or META_APP_SECRET not configured");
+    if (!igAppId || !appSecret) {
+      console.error("Instagram connect: INSTAGRAM_APP_ID or META_APP_SECRET not configured");
       return NextResponse.json(
-        { error: "Instagram integration not configured. META_APP_ID and META_APP_SECRET must be set in environment variables." },
+        { error: "Instagram integration not configured. INSTAGRAM_APP_ID and META_APP_SECRET must be set in environment variables." },
         { status: 500 },
       );
     }

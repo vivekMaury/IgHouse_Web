@@ -6,6 +6,7 @@ const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   META_APP_ID: z.string().min(1),
   META_APP_SECRET: z.string().min(1),
+  INSTAGRAM_APP_ID: z.string().min(1),
   META_WEBHOOK_VERIFY_TOKEN: z.string().min(1),
   TOKEN_ENCRYPTION_KEY: z.string().min(64),
   INNGEST_EVENT_KEY: z.string().optional(),
