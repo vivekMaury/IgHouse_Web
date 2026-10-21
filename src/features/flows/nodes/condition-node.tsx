@@ -12,16 +12,49 @@ const FIELD_LABELS: Record<string, string> = {
   custom_field: "Custom Field",
 };
 
-export function ConditionNode({ data }: NodeProps & { data: ConditionNodeData }) {
+const targetHandle = {
+  width: 10,
+  height: 10,
+  background: "#a855f7",
+  border: "2px solid white",
+};
+
+const trueHandle = {
+  width: 10,
+  height: 10,
+  background: "#10b981",
+  border: "2px solid white",
+  left: "25%",
+};
+
+const falseHandle = {
+  width: 10,
+  height: 10,
+  background: "#ef4444",
+  border: "2px solid white",
+  left: "75%",
+};
+
+export function ConditionNode({ data, selected }: NodeProps & { data: ConditionNodeData }) {
   return (
-    <div className="w-56 rounded-lg border border-purple-500/40 bg-purple-500/5 shadow-sm">
-      <Handle type="target" position={Position.Top} className="!bg-purple-500 !h-2.5 !w-2.5" />
-      <div className="flex items-center gap-2 rounded-t-lg border-b border-purple-500/20 bg-purple-500/10 px-3 py-2">
-        <GitBranch className="h-3.5 w-3.5 text-purple-600" />
-        <span className="text-xs font-semibold text-purple-700">Condition</span>
+    <div
+      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+        selected
+          ? "border-purple-500 ring-2 ring-purple-500/20"
+          : "border-border/60"
+      }`}
+    >
+      <Handle type="target" position={Position.Top} style={targetHandle} />
+      <div className="flex items-center gap-2 rounded-t-[11px] bg-purple-500/10 px-3 py-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-500/20">
+          <GitBranch className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+        </div>
+        <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+          Condition
+        </span>
       </div>
-      <div className="px-3 py-2">
-        <p className="text-xs font-medium">
+      <div className="px-3 py-2.5">
+        <p className="text-xs font-medium text-foreground">
           {FIELD_LABELS[data.field] ?? data.field}
         </p>
         {data.value && (
@@ -30,26 +63,16 @@ export function ConditionNode({ data }: NodeProps & { data: ConditionNodeData })
           </p>
         )}
       </div>
-      <div className="flex justify-between px-2 pb-2">
-        <div className="relative">
-          <span className="text-[10px] font-medium text-emerald-600">Yes</span>
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            id="true"
-            className="!bg-emerald-500 !h-2.5 !w-2.5 !left-2"
-          />
-        </div>
-        <div className="relative">
-          <span className="text-[10px] font-medium text-red-500">No</span>
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            id="false"
-            className="!bg-red-500 !h-2.5 !w-2.5 !left-2"
-          />
-        </div>
+      <div className="flex justify-between px-4 pb-2">
+        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+          Yes
+        </span>
+        <span className="text-[10px] font-semibold text-red-500 dark:text-red-400">
+          No
+        </span>
       </div>
+      <Handle type="source" position={Position.Bottom} id="true" style={trueHandle} />
+      <Handle type="source" position={Position.Bottom} id="false" style={falseHandle} />
     </div>
   );
 }

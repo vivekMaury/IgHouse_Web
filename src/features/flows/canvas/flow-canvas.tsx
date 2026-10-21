@@ -9,6 +9,8 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  ConnectionLineType,
+  MarkerType,
   type Connection,
   type Node,
   type Edge,
@@ -20,12 +22,34 @@ import { FlowToolbar } from "./flow-toolbar";
 import { NodeConfigPanel } from "../panels/node-config-panel";
 import { validateFlow, type ValidationError } from "./flow-validation";
 import type { NodeData, FlowDefinition } from "@/lib/engine/schema";
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Zap,
+} from "lucide-react";
 
 let nodeIdCounter = 0;
 function getNodeId() {
   return `node_${++nodeIdCounter}_${Date.now()}`;
 }
+
+const defaultEdgeOptions: Omit<Edge, "id" | "source" | "target"> = {
+  type: "smoothstep",
+  animated: true,
+  style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: "hsl(var(--muted-foreground))",
+    width: 16,
+    height: 16,
+  },
+};
+
+const connectionLineStyle = {
+  stroke: "hsl(var(--ring))",
+  strokeWidth: 2,
+};
 
 export function FlowCanvas({
   initialDefinition,
@@ -38,7 +62,9 @@ export function FlowCanvas({
 }) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
+    [],
+  );
   const [showValidation, setShowValidation] = useState(false);
 
   const initialNodes: Node[] = (initialDefinition?.nodes ?? []).map((n) => ({
@@ -53,8 +79,15 @@ export function FlowCanvas({
     source: e.source,
     target: e.target,
     sourceHandle: e.sourceHandle,
+    type: "smoothstep",
     animated: true,
     style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "hsl(var(--muted-foreground))",
+      width: 16,
+      height: 16,
+    },
   }));
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -66,8 +99,18 @@ export function FlowCanvas({
         addEdge(
           {
             ...connection,
+            type: "smoothstep",
             animated: true,
-            style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
+            style: {
+              stroke: "hsl(var(--muted-foreground))",
+              strokeWidth: 1.5,
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: "hsl(var(--muted-foreground))",
+              width: 16,
+              height: 16,
+            },
           },
           eds,
         ),
@@ -82,7 +125,7 @@ export function FlowCanvas({
       const newNode: Node = {
         id,
         type: data.type,
-        position: { x: 250, y: (nodes.length + 1) * 120 },
+        position: { x: 250, y: (nodes.length + 1) * 140 },
         data,
       };
       setNodes((nds) => [...nds, newNode]);
@@ -111,25 +154,30 @@ export function FlowCanvas({
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
-      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      setEdges((eds) =>
+        eds.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      );
       setSelectedNodeId(null);
     },
     [setNodes, setEdges],
   );
 
-  const getDefinition = useCallback((): FlowDefinition => ({
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      data: n.data as NodeData,
-      position: n.position,
-    })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.sourceHandle ?? undefined,
-    })),
-  }), [nodes, edges]);
+  const getDefinition = useCallback(
+    (): FlowDefinition => ({
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        data: n.data as NodeData,
+        position: n.position,
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? undefined,
+      })),
+    }),
+    [nodes, edges],
+  );
 
   const handleSave = useCallback(() => {
     const def = getDefinition();
@@ -143,14 +191,21 @@ export function FlowCanvas({
     onSave(def);
   }, [getDefinition, onSave]);
 
-  const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
+  const selectedNode = selectedNodeId
+    ? nodes.find((n) => n.id === selectedNodeId)
+    : null;
 
-  const errorCount = validationErrors.filter((e) => e.severity === "error").length;
-  const warnCount = validationErrors.filter((e) => e.severity === "warning").length;
+  const errorCount = validationErrors.filter(
+    (e) => e.severity === "error",
+  ).length;
+  const warnCount = validationErrors.filter(
+    (e) => e.severity === "warning",
+  ).length;
 
   return (
     <div className="flex h-full">
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Toolbar + save */}
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
           <FlowToolbar onAddNode={handleAddNode} />
           <div className="flex items-center gap-2">
@@ -158,12 +213,14 @@ export function FlowCanvas({
               <div className="flex items-center gap-1.5 text-xs">
                 {errorCount > 0 && (
                   <span className="flex items-center gap-1 text-destructive">
-                    <XCircle className="h-3.5 w-3.5" /> {errorCount} error{errorCount > 1 ? "s" : ""}
+                    <XCircle className="h-3.5 w-3.5" /> {errorCount} error
+                    {errorCount > 1 ? "s" : ""}
                   </span>
                 )}
                 {warnCount > 0 && (
                   <span className="flex items-center gap-1 text-amber-600">
-                    <AlertTriangle className="h-3.5 w-3.5" /> {warnCount} warning{warnCount > 1 ? "s" : ""}
+                    <AlertTriangle className="h-3.5 w-3.5" /> {warnCount}{" "}
+                    warning{warnCount > 1 ? "s" : ""}
                   </span>
                 )}
               </div>
@@ -176,13 +233,14 @@ export function FlowCanvas({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-md bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save Draft"}
             </button>
           </div>
         </div>
 
+        {/* Validation errors banner */}
         {showValidation && validationErrors.length > 0 && (
           <div className="border-b border-border/60 bg-muted/30 px-4 py-2 space-y-1">
             {validationErrors.map((err, i) => (
@@ -192,7 +250,13 @@ export function FlowCanvas({
                 ) : (
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
                 )}
-                <span className={err.severity === "error" ? "text-destructive" : "text-amber-600"}>
+                <span
+                  className={
+                    err.severity === "error"
+                      ? "text-destructive"
+                      : "text-amber-600"
+                  }
+                >
                   {err.message}
                 </span>
               </div>
@@ -200,7 +264,12 @@ export function FlowCanvas({
           </div>
         )}
 
-        <div ref={reactFlowWrapper} className="flex-1">
+        {/* Canvas */}
+        <div
+          ref={reactFlowWrapper}
+          className="relative min-h-0 flex-1"
+          style={{ width: "100%", height: "100%" }}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -210,28 +279,58 @@ export function FlowCanvas({
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            connectionLineStyle={connectionLineStyle}
             snapToGrid
             snapGrid={[16, 16]}
             fitView
+            fitViewOptions={{ padding: 0.3 }}
             deleteKeyCode="Delete"
             className="bg-muted/20"
           >
             <Background gap={16} size={1} />
-            <Controls showInteractive={false} />
+            <Controls
+              showInteractive={false}
+              className="rounded-lg border border-border/60 bg-background shadow-sm"
+            />
             <MiniMap
               nodeStrokeColor="hsl(var(--border))"
               nodeColor="hsl(var(--muted))"
               maskColor="hsl(var(--background) / 0.7)"
+              className="rounded-lg border border-border/60"
             />
           </ReactFlow>
+
+          {/* Empty state */}
+          {nodes.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-background/90 px-8 py-6 backdrop-blur-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10">
+                  <Zap className="h-5 w-5 text-amber-500" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    Start building your flow
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Add a Trigger node from the toolbar to begin
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Config panel */}
       {selectedNode && (
         <NodeConfigPanel
           nodeId={selectedNode.id}
           data={selectedNode.data as NodeData}
-          onChange={(newData) => handleNodeDataChange(selectedNode.id, newData)}
+          onChange={(newData) =>
+            handleNodeDataChange(selectedNode.id, newData)
+          }
           onClose={() => setSelectedNodeId(null)}
           onDelete={() => handleDeleteNode(selectedNode.id)}
         />

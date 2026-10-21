@@ -4,23 +4,43 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { UserPlus } from "lucide-react";
 import type { LeadCaptureNode as LeadCaptureNodeData } from "@/lib/engine/schema";
 
-export function LeadCaptureNode({ data }: NodeProps & { data: LeadCaptureNodeData }) {
+const handleStyle = {
+  width: 10,
+  height: 10,
+  background: "#10b981",
+  border: "2px solid white",
+};
+
+export function LeadCaptureNode({ data, selected }: NodeProps & { data: LeadCaptureNodeData }) {
+  const prompt =
+    data.promptText.length > 50
+      ? data.promptText.slice(0, 50) + "…"
+      : data.promptText;
+
   return (
-    <div className="w-56 rounded-lg border border-emerald-500/40 bg-emerald-500/5 shadow-sm">
-      <Handle type="target" position={Position.Top} className="!bg-emerald-500 !h-2.5 !w-2.5" />
-      <div className="flex items-center gap-2 rounded-t-lg border-b border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
-        <UserPlus className="h-3.5 w-3.5 text-emerald-600" />
-        <span className="text-xs font-semibold text-emerald-700">Lead Capture</span>
+    <div
+      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+        selected
+          ? "border-emerald-500 ring-2 ring-emerald-500/20"
+          : "border-border/60"
+      }`}
+    >
+      <Handle type="target" position={Position.Top} style={handleStyle} />
+      <div className="flex items-center gap-2 rounded-t-[11px] bg-emerald-500/10 px-3 py-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/20">
+          <UserPlus className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+          Lead Capture
+        </span>
       </div>
-      <div className="px-3 py-2">
-        <p className="text-xs font-medium capitalize">{data.field}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {data.promptText.length > 50
-            ? data.promptText.slice(0, 50) + "…"
-            : data.promptText}
+      <div className="px-3 py-2.5">
+        <p className="text-xs font-medium capitalize text-foreground">{data.field}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+          {prompt}
         </p>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-emerald-500 !h-2.5 !w-2.5" />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} />
     </div>
   );
 }

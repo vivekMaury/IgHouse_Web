@@ -13,24 +13,55 @@ const TRIGGER_LABELS: Record<string, string> = {
   ice_breaker: "Ice Breaker",
 };
 
-export function TriggerNode({ data }: NodeProps & { data: TriggerNodeData }) {
+const handleStyle = {
+  width: 10,
+  height: 10,
+  background: "#f59e0b",
+  border: "2px solid white",
+};
+
+export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeData }) {
+  const keywords = (data.keywords ?? []).filter((k) => k.trim());
+
   return (
-    <div className="w-56 rounded-lg border border-amber-500/40 bg-amber-500/5 shadow-sm">
-      <div className="flex items-center gap-2 rounded-t-lg border-b border-amber-500/20 bg-amber-500/10 px-3 py-2">
-        <Zap className="h-3.5 w-3.5 text-amber-600" />
-        <span className="text-xs font-semibold text-amber-700">Trigger</span>
+    <div
+      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+        selected
+          ? "border-amber-500 ring-2 ring-amber-500/20"
+          : "border-border/60"
+      }`}
+    >
+      <div className="flex items-center gap-2 rounded-t-[11px] bg-amber-500/10 px-3 py-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-500/20">
+          <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+        </div>
+        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+          Trigger
+        </span>
       </div>
-      <div className="px-3 py-2">
-        <p className="text-xs font-medium">
+      <div className="px-3 py-2.5">
+        <p className="text-xs font-medium text-foreground">
           {TRIGGER_LABELS[data.triggerType] ?? data.triggerType}
         </p>
-        {data.keywords && data.keywords.length > 0 && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Keywords: {data.keywords.join(", ")}
-          </p>
+        {keywords.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {keywords.slice(0, 3).map((kw, i) => (
+              <span
+                key={i}
+                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+              >
+                {kw}
+              </span>
+            ))}
+            {keywords.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{keywords.length - 3}
+              </span>
+            )}
+          </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-amber-500 !h-2.5 !w-2.5" />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} />
     </div>
   );
 }

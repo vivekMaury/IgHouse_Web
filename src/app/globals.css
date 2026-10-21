@@ -158,3 +158,24 @@
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+/* ReactFlow overrides */
+.react-flow__handle {
+  transition: box-shadow 0.15s ease;
+}
+.react-flow__handle:hover {
+  box-shadow: 0 0 0 4px oklch(0.6 0.15 250 / 0.3);
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: hsl(var(--ring)) !important;
+  stroke-width: 2.5 !important;
+}
+.react-flow__node {
+  transition: filter 0.15s ease;
+}
+.react-flow__node:hover {
+  filter: drop-shadow(0 2px 8px oklch(0 0 0 / 0.08));
+}
+.react-flow__node.selected {
+  filter: drop-shadow(0 2px 12px oklch(0 0 0 / 0.12));
+}
