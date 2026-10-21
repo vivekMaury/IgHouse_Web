@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
   exchangeCodeForToken,
@@ -13,8 +14,10 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
+  const errorReason = searchParams.get("error_reason");
 
   if (error) {
+    console.error("Instagram OAuth denied:", error, errorReason);
     return NextResponse.redirect(
       `${origin}/dashboard/settings?error=instagram_auth_denied`
     );
@@ -26,11 +29,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const supabase = await createClient();
+  // Read OAuth state cookie using Next.js API
+  const cookieStore = await cookies();
+  const stateCookie = cookieStore.get("ig_oauth_state");
 
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const stateMatch = cookieHeader.match(/ig_oauth_state=([^;]+)/);
-  if (!stateMatch?.[1]) {
+  if (!stateCookie?.value) {
+    console.error("Instagram callback: ig_oauth_state cookie missing");
     return NextResponse.redirect(
       `${origin}/dashboard/settings?error=missing_state`
     );
@@ -38,22 +42,25 @@ export async function GET(request: Request) {
 
   let storedState: { state: string; workspaceId: string };
   try {
-    storedState = JSON.parse(decodeURIComponent(stateMatch[1])) as {
+    storedState = JSON.parse(stateCookie.value) as {
       state: string;
       workspaceId: string;
     };
   } catch {
+    console.error("Instagram callback: failed to parse ig_oauth_state cookie");
     return NextResponse.redirect(
       `${origin}/dashboard/settings?error=invalid_state`
     );
   }
 
   if (state !== storedState.state) {
+    console.error("Instagram callback: state mismatch");
     return NextResponse.redirect(
       `${origin}/dashboard/settings?error=state_mismatch`
     );
   }
 
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -78,7 +85,7 @@ export async function GET(request: Request) {
 
     const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
 
-    await supabase.from("connected_accounts").upsert(
+    const { error: upsertError } = await supabase.from("connected_accounts").upsert(
       {
         workspace_id: storedState.workspaceId,
         platform: "instagram",
@@ -98,6 +105,13 @@ export async function GET(request: Request) {
       } as Record<string, unknown>,
       { onConflict: "workspace_id,platform,platform_account_id" }
     );
+
+    if (upsertError) {
+      console.error("Instagram callback: DB upsert failed:", upsertError);
+      return NextResponse.redirect(
+        `${origin}/dashboard/settings?error=instagram_connect_failed`
+      );
+    }
 
     await writeAuditLog({
       workspace_id: storedState.workspaceId,

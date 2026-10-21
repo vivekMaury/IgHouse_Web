@@ -3,16 +3,32 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 
-const PUBLIC_ROUTES = ["/", "/pricing", "/login", "/signup", "/callback", "/privacy", "/terms", "/data-deletion", "/docs"];
+const PUBLIC_PATHS = [
+  "/",
+  "/pricing",
+  "/login",
+  "/signup",
+  "/callback",
+  "/privacy",
+  "/terms",
+  "/data-deletion",
+  "/docs",
+];
+
+function isPublicRoute(path: string): boolean {
+  if (PUBLIC_PATHS.includes(path)) return true;
+  if (path.startsWith("/api/webhooks")) return true;
+  if (path.startsWith("/api/meta/data-deletion")) return true;
+  if (path.startsWith("/api/instagram/callback")) return true;
+  return false;
+}
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_ROUTES.some(
-    (route) => path === route || path.startsWith("/api/webhooks") || path.startsWith("/api/meta/data-deletion")
-  );
+  const isPublic = isPublicRoute(path);
 
   const cspDirectives = [
     "default-src 'self'",
@@ -23,7 +39,7 @@ export async function middleware(request: NextRequest) {
     "font-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https://www.instagram.com https://www.facebook.com",
     "object-src 'none'",
     "upgrade-insecure-requests",
   ];
