@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { MessageSquare, Bot, UserRound } from "lucide-react";
 import Image from "next/image";
 
-type Conversation = {
+export type Conversation = {
   id: string;
   status: string;
   bot_paused: boolean;
@@ -26,7 +26,13 @@ type Filter = "all" | "unread" | "bot_active" | "bot_paused";
 
 function sanitizeText(text: string): string {
   return text.replace(/[<>"'&]/g, (c) => {
-    const map: Record<string, string> = { "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" };
+    const map: Record<string, string> = {
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+      "&": "&amp;",
+    };
     return map[c] ?? c;
   });
 }
@@ -38,7 +44,7 @@ export function ConversationList({
 }: {
   workspaceId: string;
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (conv: Conversation) => void;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
@@ -47,9 +53,13 @@ export function ConversationList({
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const res = await fetch(`/api/conversations?filter=${filter}&limit=50`);
+      const res = await fetch(
+        `/api/conversations?filter=${filter}&limit=50`,
+      );
       if (res.ok) {
-        const data = (await res.json()) as { conversations: Conversation[] };
+        const data = (await res.json()) as {
+          conversations: Conversation[];
+        };
         setConversations(data.conversations);
       }
       setLoading(false);
@@ -73,9 +83,9 @@ export function ConversationList({
           fetch(`/api/conversations?filter=${filter}&limit=50`)
             .then((res) => res.json())
             .then((data: { conversations: Conversation[] }) =>
-              setConversations(data.conversations)
+              setConversations(data.conversations),
             );
-        }
+        },
       )
       .subscribe();
 
@@ -111,40 +121,49 @@ export function ConversationList({
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-center text-xs text-muted-foreground">Loading…</div>
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            Loading…
+          </div>
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <MessageSquare className="h-8 w-8 text-muted-foreground/30" />
-            <p className="mt-2 text-xs text-muted-foreground">No conversations</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              No conversations
+            </p>
           </div>
         ) : (
           conversations.map((conv) => {
-            const username = conv.contacts?.username ?? conv.contacts?.platform_scoped_id ?? "Unknown";
+            const username =
+              conv.contacts?.username ??
+              conv.contacts?.platform_scoped_id ??
+              "Unknown";
 
             return (
               <button
                 key={conv.id}
-                onClick={() => onSelect(conv.id)}
+                onClick={() => onSelect(conv)}
                 className={`flex w-full items-center gap-3 border-b border-border/40 px-3 py-3 text-left transition-colors ${
-                  selectedId === conv.id ? "bg-accent/50" : "hover:bg-muted/30"
+                  selectedId === conv.id
+                    ? "bg-accent/50"
+                    : "hover:bg-muted/30"
                 }`}
               >
                 {conv.contacts?.avatar_url ? (
                   <Image
                     src={conv.contacts.avatar_url}
                     alt=""
-                    width={32}
-                    height={32}
-                    className="h-8 w-8 rounded-full"
+                    width={36}
+                    height={36}
+                    className="h-9 w-9 rounded-full"
                     unoptimized
                   />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
                     <UserRound className="h-4 w-4 text-muted-foreground" />
                   </div>
                 )}
 
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-sm font-medium">
                       {sanitizeText(username)}
@@ -161,11 +180,15 @@ export function ConversationList({
                     ) : (
                       <Bot className="h-3 w-3 text-emerald-500" />
                     )}
-                    <span>{conv.bot_paused ? "Human" : "Bot active"}</span>
+                    <span>
+                      {conv.bot_paused ? "Human" : "Bot active"}
+                    </span>
                     {conv.last_message_at && (
                       <>
                         <span>&middot;</span>
-                        <span>{formatTimeAgo(conv.last_message_at)}</span>
+                        <span>
+                          {formatTimeAgo(conv.last_message_at)}
+                        </span>
                       </>
                     )}
                   </div>

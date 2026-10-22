@@ -93,6 +93,60 @@ async function writeAutomationLogs(
   }
 }
 
+async function recordOutboundMessages(
+  supabase: ReturnType<typeof createAdminClient>,
+  actions: Action[],
+  metaResponses: Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>,
+  workspaceId: string,
+  contactId: string,
+  connectedAccountId: string,
+) {
+  const msgRows: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]!;
+    if (action.type !== "send_dm" && action.type !== "send_private_reply") continue;
+
+    const meta = metaResponses.get(i);
+    if (meta && !meta.success) continue;
+
+    msgRows.push({
+      workspace_id: workspaceId,
+      direction: "outbound",
+      source: "automation",
+      content: action.text,
+      sent_at: new Date().toISOString(),
+      platform_message_id: (meta?.response?.message_id as string) ?? null,
+    });
+  }
+
+  if (msgRows.length === 0) return;
+
+  const { data: conv } = await supabase
+    .from("conversations")
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        contact_id: contactId,
+        connected_account_id: connectedAccountId,
+        last_message_at: new Date().toISOString(),
+        status: "open",
+      } as Record<string, unknown>,
+      { onConflict: "workspace_id,contact_id,connected_account_id" },
+    )
+    .select("id")
+    .single();
+
+  if (!conv) return;
+  const conversationId = (conv as { id: string }).id;
+
+  for (const row of msgRows) {
+    row.conversation_id = conversationId;
+  }
+
+  await supabase.from("messages").insert(msgRows);
+}
+
 async function executeActions(
   actions: Action[],
   ctx: SendContext,
@@ -351,6 +405,7 @@ export const processWebhookEvent = inngest.createFunction(
         const metaResponses = await executeActions(result.actions, ctx, supabase, account.workspace_id, waitingRun.flow_id, contact.id);
 
         await writeAutomationLogs(supabase, result.actions, account.workspace_id, waitingRun.flow_id, waitingRun.id, metaResponses);
+        await recordOutboundMessages(supabase, result.actions, metaResponses, account.workspace_id, contact.id, account.id);
 
         // Update flow_run
         await supabase
@@ -571,6 +626,7 @@ export const processWebhookEvent = inngest.createFunction(
         const metaResponses = await executeActions(filteredActions, ctx, supabase, account.workspace_id, match.flowId, contact.id);
 
         await writeAutomationLogs(supabase, result.actions, account.workspace_id, match.flowId, runId, metaResponses);
+        await recordOutboundMessages(supabase, filteredActions, metaResponses, account.workspace_id, contact.id, account.id);
 
         if (result.nextState.status === "completed" || result.nextState.status === "failed") {
           await supabase
@@ -712,6 +768,7 @@ async function continueFlowRun(
   const metaResponses = await executeActions(result.actions, ctx, supabase, workspaceId, run.flow_id, contact.id);
 
   await writeAutomationLogs(supabase, result.actions, workspaceId, run.flow_id, run.id, metaResponses);
+  await recordOutboundMessages(supabase, result.actions, metaResponses, workspaceId, contact.id, accountId);
 
   await supabase
     .from("flow_runs")

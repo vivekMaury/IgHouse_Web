@@ -317,3 +317,20 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+--------------------------------------------------------------------------------
+-- Atomic increment for conversation unread count
+--------------------------------------------------------------------------------
+create or replace function public.increment_unread(conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update conversations
+  set unread_count = unread_count + 1,
+      updated_at = now()
+  where id = conversation_id;
+end;
+$$;
