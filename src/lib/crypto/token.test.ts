@@ -44,4 +44,17 @@ describe("AES-256-GCM token encryption", () => {
     const { ciphertext, iv } = encryptToken(longToken);
     expect(decryptToken(ciphertext, iv)).toBe(longToken);
   });
+
+  it("round-trips through PostgREST \\x hex bytea format", () => {
+    const token = "IGQVJWZAnRsX3BhNk5SemRqUmlGRjJF";
+    const { ciphertext, iv } = encryptToken(token);
+
+    const dbEncrypted = `\\x${ciphertext.toString("hex")}`;
+    const dbIv = `\\x${iv.toString("hex")}`;
+
+    const parsedCiphertext = Buffer.from(dbEncrypted.slice(2), "hex");
+    const parsedIv = Buffer.from(dbIv.slice(2), "hex");
+
+    expect(decryptToken(parsedCiphertext, parsedIv)).toBe(token);
+  });
 });

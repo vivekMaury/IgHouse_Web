@@ -1,13 +1,21 @@
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { InstagramConnectCard } from "./instagram-connect-card";
-import { DangerZone } from "./danger-zone";
+import { SettingsTabs } from "./settings-tabs";
 
 export const instant = false;
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await connection();
+
+  const params = await searchParams;
+  const connected = params.connected === "true";
+  const error = typeof params.error === "string" ? params.error : null;
+  const tab = typeof params.tab === "string" ? params.tab : "integrations";
 
   const supabase = await createClient();
   const {
@@ -56,9 +64,30 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <InstagramConnectCard accounts={connectedAccounts} />
+      {connected && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">
+          Instagram account connected successfully.
+        </div>
+      )}
 
-      <DangerZone />
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error === "instagram_auth_denied"
+            ? "Instagram authorization was denied."
+            : error === "token_exchange_failed"
+              ? "Failed to exchange Instagram token. Please try again."
+              : error === "db_save_failed"
+                ? "Failed to save account. Please try again."
+                : error === "encryption_failed"
+                  ? "Server encryption error. Please contact support."
+                  : `Connection error: ${error}`}
+        </div>
+      )}
+
+      <SettingsTabs
+        defaultTab={tab === "workspace" ? "workspace" : "integrations"}
+        accounts={connectedAccounts}
+      />
     </div>
   );
 }

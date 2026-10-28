@@ -192,7 +192,7 @@ export async function GET(request: Request) {
   }
 
   // Step 7: Redirect to dashboard with success
-  const response = NextResponse.redirect(`${settingsUrl}?success=instagram_connected`);
+  const response = NextResponse.redirect(`${settingsUrl}?connected=true`);
   response.cookies.delete("ig_oauth_state");
   return response;
 }

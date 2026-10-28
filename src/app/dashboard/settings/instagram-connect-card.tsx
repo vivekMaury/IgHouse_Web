@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Camera, CheckCircle2, AlertTriangle, Trash2 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type ConnectedAccount = {
@@ -34,11 +34,7 @@ function getTokenStatus(expiresAt: string | null): {
 
 export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[] }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
-
-  const successMsg = searchParams.get("success");
-  const errorMsg = searchParams.get("error");
 
   async function handleDisconnect(accountId: string) {
     setDisconnecting(accountId);
@@ -62,22 +58,6 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
         <Camera className="h-5 w-5" />
         <h2 className="text-lg font-semibold">Instagram Connection</h2>
       </div>
-
-      {successMsg === "instagram_connected" && (
-        <div className="rounded-md bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">
-          Instagram account connected successfully.
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {errorMsg === "instagram_auth_denied"
-            ? "Instagram authorization was denied."
-            : errorMsg === "instagram_connect_failed"
-              ? "Failed to connect Instagram. Please try again."
-              : `Connection error: ${errorMsg}`}
-        </div>
-      )}
 
       {accounts.length === 0 ? (
         <div className="space-y-3">

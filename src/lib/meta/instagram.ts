@@ -95,7 +95,7 @@ export async function getInstagramProfile(
   token: string
 ): Promise<{ id: string; username: string; profile_picture_url?: string }> {
   const params = new URLSearchParams({
-    fields: "user_id,username,profile_picture_url",
+    fields: "id,user_id,username,account_type,profile_picture_url",
     access_token: token,
   });
 
@@ -107,13 +107,15 @@ export async function getInstagramProfile(
   }
 
   const data = (await res.json()) as {
-    user_id: string;
+    id?: string;
+    user_id?: string;
     username: string;
+    account_type?: string;
     profile_picture_url?: string;
   };
 
   return {
-    id: data.user_id,
+    id: data.user_id ?? data.id ?? "",
     username: data.username,
     profile_picture_url: data.profile_picture_url,
   };

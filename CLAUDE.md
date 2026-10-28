@@ -11,6 +11,9 @@ Instagram DM & Comment Automation SaaS. Always read `docs/PRD.md` before plannin
 - **Queue / Durable Jobs:** Inngest (`inngest` SDK) for webhook processing, `step.sleep` delays, and `step.waitForEvent` reply timeouts.
 - **Cache / Rate Limit:** Upstash Redis (`@upstash/redis`, `@upstash/ratelimit`).
 
+## Next.js 16 / cacheComponents
+This project uses Next.js 16 with `cacheComponents` enabled in `next.config`. Never use `export const dynamic = 'force-dynamic'`; it causes a build error. Always use `await connection()` from `next/server` at the top of async Server Components to opt into dynamic rendering.
+
 ## Hard Engineering Rules
 1. **Zero Secrets in Client/Logs:** All env vars validated in `src/lib/env.ts` via Zod. Never import `service_role` key outside `src/lib/supabase/admin.ts` or server workers. Encrypt Meta tokens with AES-256-GCM (`key_version` supported).
 2. **Multi-Tenancy First:** Every table MUST include `workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE`, composite indexes starting with `workspace_id`, and pgTAP/SQL tests proving Workspace A cannot read/modify Workspace B.

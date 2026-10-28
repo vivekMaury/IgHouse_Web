@@ -94,14 +94,14 @@ export default async function DashboardPage() {
 
   const activeFlows = flows.filter((f) => f.status === "published").length;
   const totalFlows = flows.length;
-  const hasInstagram = !!connectedAccount;
+  const hasInstagram = !!connectedAccount?.is_active;
   const hasFlows = totalFlows > 0;
   const hasPublishedFlow = activeFlows > 0;
 
   // Onboarding checklist
   const steps = [
     { label: "Create your account", done: true, href: "#" },
-    { label: "Connect Instagram", done: hasInstagram, href: "/dashboard/settings" },
+    { label: "Connect Instagram", done: hasInstagram, href: "/dashboard/settings?tab=integrations" },
     { label: "Create your first flow", done: hasFlows, href: "/dashboard/flows/new" },
     { label: "Publish a flow", done: hasPublishedFlow, href: hasFlows ? `/dashboard/flows/${flows[0]?.id}` : "/dashboard/flows/new" },
   ];
