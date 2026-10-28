@@ -14,7 +14,7 @@ export function DelayNode({ data, selected }: NodeProps & { data: DelayNodeData 
       }`}
     >
       {/* Exec in */}
-      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+      <Handle className="handle-exec" id="exec-in" type="target" position={Position.Top} isConnectable />
 
       <div className="flex items-center gap-2 rounded-t-[11px] bg-orange-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-orange-500/20">
@@ -31,7 +31,7 @@ export function DelayNode({ data, selected }: NodeProps & { data: DelayNodeData 
       </div>
 
       {/* Exec out */}
-      <Handle className="handle-exec" type="source" position={Position.Bottom} isConnectable />
+      <Handle className="handle-exec" id="exec-out" type="source" position={Position.Bottom} isConnectable />
     </div>
   );
 }

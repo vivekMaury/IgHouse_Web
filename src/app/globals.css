@@ -314,16 +314,13 @@
   box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.3);
 }
 
-/* ── Exec edges — dashed grey, animated flow ─────────────────────── */
-@keyframes exec-dash {
-  to { stroke-dashoffset: -12; }
-}
+/* ── Exec edges — subtle dashed grey control flow ───────────────── */
 .react-flow__edge-path {
   stroke-linecap: round;
 }
 .edge-exec .react-flow__edge-path {
-  stroke-dasharray: 8 4 !important;
-  animation: exec-dash 0.7s linear infinite;
+  stroke-dasharray: 6 5 !important;
+  opacity: 0.8;
 }
 
 /* ── Data edges — solid accent, no dash ──────────────────────────── */
@@ -336,7 +333,6 @@
 .react-flow__connection-path {
   stroke-width: 2.5 !important;
   stroke-dasharray: 6 3;
-  animation: exec-dash 0.4s linear infinite;
 }
 
 /* ── Selected edge ───────────────────────────────────────────────── */

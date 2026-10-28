@@ -54,7 +54,7 @@ export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeD
           </div>
         )}
       </div>
-      <Handle className="handle-exec" type="source" position={Position.Bottom} isConnectable />
+      <Handle className="handle-exec" id="exec-out" type="source" position={Position.Bottom} isConnectable />
     </div>
   );
 }

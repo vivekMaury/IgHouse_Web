@@ -14,7 +14,7 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
       }`}
     >
       {/* Exec in */}
-      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+      <Handle className="handle-exec" id="exec-in" type="target" position={Position.Top} isConnectable />
 
       <div className="flex items-center gap-2 rounded-t-[11px] bg-teal-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-teal-500/20">

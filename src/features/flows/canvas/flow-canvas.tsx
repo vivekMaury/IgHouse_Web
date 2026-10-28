@@ -43,7 +43,7 @@ function isDataHandle(id: string | null | undefined): boolean {
 function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
   if (isDataHandle(srcHandle) || isDataHandle(tgtHandle)) {
     return {
-      type: "default" as const,
+      type: "smoothstep" as const,
       animated: false,
       className: "edge-data",
       style: { stroke: "hsl(var(--primary))", strokeWidth: 2.5 },
@@ -57,9 +57,13 @@ function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
   }
   return {
     type: "smoothstep" as const,
-    animated: true,
+    animated: false,
     className: "edge-exec",
-    style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 2 },
+    style: {
+      stroke: "hsl(var(--muted-foreground))",
+      strokeWidth: 1.75,
+      strokeDasharray: "6 5",
+    },
     markerEnd: {
       type: MarkerType.ArrowClosed,
       color: "hsl(var(--muted-foreground))",
@@ -116,8 +120,8 @@ function FlowCanvasInner({
     id: e.id,
     source: e.source,
     target: e.target,
-    sourceHandle: e.sourceHandle,
-    targetHandle: e.targetHandle,
+    sourceHandle: e.sourceHandle ?? "exec-out",
+    targetHandle: e.targetHandle ?? "exec-in",
     ...edgePropsFor(e.sourceHandle, e.targetHandle),
   }));
 

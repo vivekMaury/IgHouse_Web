@@ -22,7 +22,7 @@ export function ConditionNode({ data, selected }: NodeProps & { data: ConditionN
       }`}
     >
       {/* Exec in */}
-      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+      <Handle className="handle-exec" id="exec-in" type="target" position={Position.Top} isConnectable />
 
       <div className="flex items-center gap-2 rounded-t-[11px] bg-purple-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-500/20">
