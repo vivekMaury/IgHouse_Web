@@ -88,6 +88,52 @@ export function validateFlow(def: FlowDefinition): ValidationError[] {
         });
       }
     }
+
+    if (node.data.type === "wait_for_reply") {
+      const hasReply = def.edges.some((e) => e.source === node.id && e.sourceHandle === "reply");
+      const hasTimeout = def.edges.some((e) => e.source === node.id && e.sourceHandle === "timeout");
+      if (!hasReply && !hasTimeout) {
+        errors.push({
+          nodeId: node.id,
+          message: "Wait for Reply node has no outgoing connections.",
+          severity: "warning",
+        });
+      }
+      if (!hasReply) {
+        errors.push({
+          nodeId: node.id,
+          message: "Wait for Reply node is missing a \"Reply\" connection.",
+          severity: "warning",
+        });
+      }
+    }
+
+    if (node.data.type === "http_request") {
+      if (!node.data.url.trim() || node.data.url.trim() === "https://") {
+        errors.push({
+          nodeId: node.id,
+          message: "HTTP Request node needs a URL.",
+          severity: "error",
+        });
+      }
+    }
+
+    if (node.data.type === "ai_reply") {
+      if (!node.data.systemPrompt.trim()) {
+        errors.push({
+          nodeId: node.id,
+          message: "AI Reply node needs a system prompt.",
+          severity: "error",
+        });
+      }
+      if (!node.data.fallbackText.trim()) {
+        errors.push({
+          nodeId: node.id,
+          message: "AI Reply node needs fallback text.",
+          severity: "error",
+        });
+      }
+    }
   }
 
   return errors;

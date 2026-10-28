@@ -2,7 +2,7 @@
 
 import { X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { NodeData, TriggerNode, MessageNode, ConditionNode, DelayNode, LeadCaptureNode } from "@/lib/engine/schema";
+import type { NodeData, TriggerNode, MessageNode, ConditionNode, DelayNode, LeadCaptureNode, WaitForReplyNode, HttpRequestNode, AiReplyNode } from "@/lib/engine/schema";
 
 type Props = {
   nodeId: string;
@@ -35,6 +35,9 @@ export function NodeConfigPanel({ nodeId, data, onChange, onClose, onDelete }: P
         {data.type === "condition" && <ConditionConfig data={data} onChange={(d) => onChange(d)} />}
         {data.type === "delay" && <DelayConfig data={data} onChange={(d) => onChange(d)} />}
         {data.type === "lead_capture" && <LeadCaptureConfig data={data} onChange={(d) => onChange(d)} />}
+        {data.type === "wait_for_reply" && <WaitForReplyConfig data={data} onChange={(d) => onChange(d)} />}
+        {data.type === "http_request" && <HttpRequestConfig data={data} onChange={(d) => onChange(d)} />}
+        {data.type === "ai_reply" && <AiReplyConfig data={data} onChange={(d) => onChange(d)} />}
       </div>
     </div>
   );
@@ -426,6 +429,232 @@ function LeadCaptureConfig({ data, onChange }: { data: LeadCaptureNode; onChange
         />
         <p className="text-[10px] text-muted-foreground">
           Leave empty to use built-in {data.field} validation.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ---------- Wait for Reply Config ----------
+
+function WaitForReplyConfig({ data, onChange }: { data: WaitForReplyNode; onChange: (d: WaitForReplyNode) => void }) {
+  return (
+    <>
+      <div className="space-y-1.5">
+        <FieldLabel>Timeout (minutes)</FieldLabel>
+        <Input
+          type="number"
+          value={data.timeoutMinutes}
+          onChange={(v) => onChange({ ...data, timeoutMinutes: Math.max(1, Number(v)) })}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          How long to wait for a reply before following the timeout branch.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>Timeout Message (optional)</FieldLabel>
+        <Textarea
+          value={data.timeoutText ?? ""}
+          onChange={(v) => onChange({ ...data, timeoutText: v || undefined })}
+          placeholder="We didn't hear back from you…"
+          rows={2}
+        />
+      </div>
+
+      <div className="rounded-md bg-muted/50 p-2.5">
+        <p className="text-[10px] text-muted-foreground">
+          Connect the <span className="font-medium text-emerald-600">Reply</span> handle for when the contact responds,
+          and the <span className="font-medium text-amber-600">Timeout</span> handle if they don&apos;t.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ---------- HTTP Request Config ----------
+
+function HttpRequestConfig({ data, onChange }: { data: HttpRequestNode; onChange: (d: HttpRequestNode) => void }) {
+  const headers = data.headers ?? {};
+  const headerEntries = Object.entries(headers);
+  const responseMapping = data.responseMapping ?? [];
+
+  return (
+    <>
+      <div className="space-y-1.5">
+        <FieldLabel>Method</FieldLabel>
+        <Select
+          value={data.method}
+          onChange={(v) => onChange({ ...data, method: v as "GET" | "POST" })}
+          options={[
+            { value: "GET", label: "GET" },
+            { value: "POST", label: "POST" },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>URL</FieldLabel>
+        <Input
+          value={data.url}
+          onChange={(v) => onChange({ ...data, url: v })}
+          placeholder="https://api.example.com/endpoint"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Use {"{{variable}}"} for dynamic values. HTTPS only.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>Headers</FieldLabel>
+        {headerEntries.map(([key, val], i) => (
+          <div key={i} className="flex items-center gap-1">
+            <Input
+              value={key}
+              onChange={(newKey) => {
+                const updated = { ...headers };
+                delete updated[key];
+                updated[newKey] = val;
+                onChange({ ...data, headers: updated });
+              }}
+              placeholder="Header-Name"
+            />
+            <Input
+              value={val}
+              onChange={(newVal) => {
+                onChange({ ...data, headers: { ...headers, [key]: newVal } });
+              }}
+              placeholder="value"
+            />
+            <button
+              onClick={() => {
+                const updated = { ...headers };
+                delete updated[key];
+                onChange({ ...data, headers: Object.keys(updated).length > 0 ? updated : undefined });
+              }}
+              className="rounded p-1 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => onChange({ ...data, headers: { ...headers, "": "" } })}
+        >
+          <Plus className="mr-1 h-3 w-3" /> Add Header
+        </Button>
+      </div>
+
+      {data.method === "POST" && (
+        <div className="space-y-1.5">
+          <FieldLabel>Body Template (JSON)</FieldLabel>
+          <Textarea
+            value={data.bodyTemplate ?? ""}
+            onChange={(v) => onChange({ ...data, bodyTemplate: v || undefined })}
+            placeholder={'{"email": "{{email}}"}'}
+            rows={4}
+          />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <FieldLabel>Response Mapping</FieldLabel>
+        {responseMapping.map((m, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <Input
+              value={m.jsonPath}
+              onChange={(v) => {
+                const updated = [...responseMapping];
+                updated[i] = { ...m, jsonPath: v };
+                onChange({ ...data, responseMapping: updated });
+              }}
+              placeholder="$.data.id"
+            />
+            <Input
+              value={m.variable}
+              onChange={(v) => {
+                const updated = [...responseMapping];
+                updated[i] = { ...m, variable: v };
+                onChange({ ...data, responseMapping: updated });
+              }}
+              placeholder="variable_name"
+            />
+            <button
+              onClick={() => onChange({ ...data, responseMapping: responseMapping.filter((_, j) => j !== i) })}
+              className="rounded p-1 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => onChange({ ...data, responseMapping: [...responseMapping, { jsonPath: "", variable: "" }] })}
+        >
+          <Plus className="mr-1 h-3 w-3" /> Add Mapping
+        </Button>
+        <p className="text-[10px] text-muted-foreground">
+          Map JSON response fields to flow variables.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>Timeout (ms)</FieldLabel>
+        <Input
+          type="number"
+          value={data.timeoutMs}
+          onChange={(v) => onChange({ ...data, timeoutMs: Math.min(30000, Math.max(1000, Number(v))) })}
+        />
+      </div>
+    </>
+  );
+}
+
+// ---------- AI Reply Config ----------
+
+function AiReplyConfig({ data, onChange }: { data: AiReplyNode; onChange: (d: AiReplyNode) => void }) {
+  return (
+    <>
+      <div className="space-y-1.5">
+        <FieldLabel>System Prompt</FieldLabel>
+        <Textarea
+          value={data.systemPrompt}
+          onChange={(v) => onChange({ ...data, systemPrompt: v })}
+          placeholder="You are a helpful customer support agent for our store…"
+          rows={5}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Use {"{{variable}}"} for dynamic context. The contact&apos;s message is provided automatically.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>Max Tokens</FieldLabel>
+        <Input
+          type="number"
+          value={data.maxTokens}
+          onChange={(v) => onChange({ ...data, maxTokens: Math.min(1000, Math.max(1, Number(v))) })}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Maximum response length (1–1000 tokens).
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel>Fallback Text</FieldLabel>
+        <Textarea
+          value={data.fallbackText}
+          onChange={(v) => onChange({ ...data, fallbackText: v })}
+          placeholder="Sorry, I can't help with that right now. A team member will follow up."
+          rows={2}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Sent if the AI fails to generate a response.
         </p>
       </div>
     </>

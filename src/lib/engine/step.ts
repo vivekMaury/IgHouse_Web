@@ -36,6 +36,9 @@ export type Action =
   | { type: "capture_lead"; field: string; value: string }
   | { type: "schedule_delay"; durationMs: number }
   | { type: "request_reply"; promptText: string }
+  | { type: "schedule_wait_timeout"; durationMs: number; timeoutText?: string }
+  | { type: "http_request"; url: string; method: string; headers: Record<string, string>; body?: string; responseMapping: Array<{ jsonPath: string; variable: string }>; timeoutMs: number }
+  | { type: "ai_reply"; systemPrompt: string; contactMessage: string; maxTokens: number; fallbackText: string }
   | { type: "log"; nodeId: string; action: string; success: boolean; error?: string };
 
 export type StepResult = {
@@ -278,6 +281,72 @@ export function step(
           };
         }
         break;
+      }
+
+      case "wait_for_reply": {
+        if (run.currentNodeId === node.id && run.status === "running") {
+          if (event.type === "message") {
+            actions.push({ type: "log", nodeId: node.id, action: "reply_received", success: true });
+            currentNodeId = getNextNodeId(flow, node.id, "reply");
+          } else if (event.type === "timeout") {
+            if (data.timeoutText) {
+              actions.push({ type: "send_dm", text: interpolateVariables(data.timeoutText, context) });
+            }
+            actions.push({ type: "log", nodeId: node.id, action: "wait_timed_out", success: true });
+            currentNodeId = getNextNodeId(flow, node.id, "timeout");
+          } else {
+            return {
+              actions,
+              nextState: { ...run, currentNodeId: node.id, status: "waiting", context },
+            };
+          }
+        } else {
+          const durationMs = data.timeoutMinutes * 60_000;
+          actions.push({ type: "schedule_wait_timeout", durationMs, timeoutText: data.timeoutText });
+          actions.push({ type: "log", nodeId: node.id, action: "wait_started", success: true });
+          return {
+            actions,
+            nextState: { ...run, currentNodeId: node.id, status: "waiting", context },
+          };
+        }
+        break;
+      }
+
+      case "http_request": {
+        const url = interpolateVariables(data.url, context);
+        const body = data.bodyTemplate
+          ? interpolateVariables(data.bodyTemplate, context)
+          : undefined;
+        actions.push({
+          type: "http_request",
+          url,
+          method: data.method,
+          headers: data.headers ?? {},
+          body,
+          responseMapping: data.responseMapping ?? [],
+          timeoutMs: data.timeoutMs,
+        });
+        actions.push({ type: "log", nodeId: node.id, action: "http_request_emitted", success: true });
+        currentNodeId = getNextNodeId(flow, node.id);
+        break;
+      }
+
+      case "ai_reply": {
+        const contactMessage = event.text ?? "";
+        const systemPrompt = interpolateVariables(data.systemPrompt, context);
+        actions.push({
+          type: "ai_reply",
+          systemPrompt,
+          contactMessage,
+          maxTokens: data.maxTokens,
+          fallbackText: interpolateVariables(data.fallbackText, context),
+        });
+        actions.push({ type: "log", nodeId: node.id, action: "ai_reply_emitted", success: true });
+        currentNodeId = getNextNodeId(flow, node.id);
+        return {
+          actions,
+          nextState: { ...run, currentNodeId, status: "waiting", context },
+        };
       }
     }
   }

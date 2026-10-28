@@ -64,12 +64,40 @@ export const LeadCaptureNodeSchema = z.object({
   errorText: z.string().optional(),
 });
 
+export const WaitForReplyNodeSchema = z.object({
+  type: z.literal("wait_for_reply"),
+  timeoutMinutes: z.number().min(1).default(60),
+  timeoutText: z.string().optional(),
+});
+
+export const HttpRequestNodeSchema = z.object({
+  type: z.literal("http_request"),
+  url: z.string().min(1),
+  method: z.enum(["GET", "POST"]).default("GET"),
+  headers: z.record(z.string(), z.string()).optional(),
+  bodyTemplate: z.string().optional(),
+  responseMapping: z
+    .array(z.object({ jsonPath: z.string(), variable: z.string() }))
+    .optional(),
+  timeoutMs: z.number().min(1000).max(30000).default(10000),
+});
+
+export const AiReplyNodeSchema = z.object({
+  type: z.literal("ai_reply"),
+  systemPrompt: z.string().min(1),
+  maxTokens: z.number().min(1).max(1000).default(300),
+  fallbackText: z.string().min(1),
+});
+
 export const NodeDataSchema = z.discriminatedUnion("type", [
   TriggerNodeSchema,
   MessageNodeSchema,
   ConditionNodeSchema,
   DelayNodeSchema,
   LeadCaptureNodeSchema,
+  WaitForReplyNodeSchema,
+  HttpRequestNodeSchema,
+  AiReplyNodeSchema,
 ]);
 
 export const FlowNodeSchema = z.object({
@@ -83,6 +111,7 @@ export const FlowEdgeSchema = z.object({
   source: z.string(),
   target: z.string(),
   sourceHandle: z.string().optional(),
+  targetHandle: z.string().optional(),
 });
 
 export const FlowDefinitionSchema = z.object({
@@ -95,6 +124,9 @@ export type MessageNode = z.infer<typeof MessageNodeSchema>;
 export type ConditionNode = z.infer<typeof ConditionNodeSchema>;
 export type DelayNode = z.infer<typeof DelayNodeSchema>;
 export type LeadCaptureNode = z.infer<typeof LeadCaptureNodeSchema>;
+export type WaitForReplyNode = z.infer<typeof WaitForReplyNodeSchema>;
+export type HttpRequestNode = z.infer<typeof HttpRequestNodeSchema>;
+export type AiReplyNode = z.infer<typeof AiReplyNodeSchema>;
 export type NodeData = z.infer<typeof NodeDataSchema>;
 export type FlowNode = z.infer<typeof FlowNodeSchema>;
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;

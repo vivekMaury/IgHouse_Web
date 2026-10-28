@@ -79,6 +79,7 @@ export function FlowCanvas({
     source: e.source,
     target: e.target,
     sourceHandle: e.sourceHandle,
+    targetHandle: e.targetHandle,
     type: "smoothstep",
     animated: true,
     style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
@@ -92,6 +93,20 @@ export function FlowCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  const isValidConnection = useCallback(
+    (connection: Edge | Connection) => {
+      if (connection.source === connection.target) return false;
+      const duplicate = edges.some(
+        (e) =>
+          e.source === connection.source &&
+          e.target === connection.target &&
+          (e.sourceHandle ?? null) === (connection.sourceHandle ?? null),
+      );
+      return !duplicate;
+    },
+    [edges],
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -174,6 +189,7 @@ export function FlowCanvas({
         source: e.source,
         target: e.target,
         sourceHandle: e.sourceHandle ?? undefined,
+        targetHandle: e.targetHandle ?? undefined,
       })),
     }),
     [nodes, edges],
@@ -276,6 +292,7 @@ export function FlowCanvas({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}

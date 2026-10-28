@@ -6,6 +6,9 @@ import {
   GitBranch,
   Clock,
   UserPlus,
+  Timer,
+  Globe,
+  Sparkles,
 } from "lucide-react";
 import type { NodeData } from "@/lib/engine/schema";
 
@@ -61,6 +64,37 @@ const NODE_TEMPLATES: NodeTemplate[] = [
       promptText: "What is your email?",
     },
   },
+  {
+    label: "Wait for Reply",
+    icon: Timer,
+    color: "text-teal-600 dark:text-teal-400",
+    bg: "hover:bg-teal-500/10",
+    data: { type: "wait_for_reply", timeoutMinutes: 60 },
+  },
+  {
+    label: "HTTP Request",
+    icon: Globe,
+    color: "text-indigo-600 dark:text-indigo-400",
+    bg: "hover:bg-indigo-500/10",
+    data: {
+      type: "http_request",
+      url: "https://",
+      method: "GET",
+      timeoutMs: 10000,
+    },
+  },
+  {
+    label: "AI Reply",
+    icon: Sparkles,
+    color: "text-violet-600 dark:text-violet-400",
+    bg: "hover:bg-violet-500/10",
+    data: {
+      type: "ai_reply",
+      systemPrompt: "You are a helpful assistant.",
+      maxTokens: 300,
+      fallbackText: "Sorry, I cannot help with that right now.",
+    },
+  },
 ];
 
 export function FlowToolbar({
@@ -69,7 +103,7 @@ export function FlowToolbar({
   onAddNode: (data: NodeData) => void;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {NODE_TEMPLATES.map((tpl) => (
         <button
           key={tpl.label}

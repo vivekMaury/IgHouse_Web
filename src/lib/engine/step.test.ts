@@ -383,3 +383,185 @@ describe("Engine step() — Edge cases", () => {
     expect(result.nextState.status).toBe("running");
   });
 });
+
+describe("Engine step() — Wait for Reply node", () => {
+  const flow: FlowDefinition = {
+    nodes: [
+      { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+      { id: "w1", data: { type: "wait_for_reply", timeoutMinutes: 30 } },
+      { id: "m_reply", data: { type: "message", messageType: "dm", text: "Got reply" } },
+      { id: "m_timeout", data: { type: "message", messageType: "dm", text: "Timed out" } },
+    ],
+    edges: [
+      { id: "e1", source: "t1", target: "w1" },
+      { id: "e2", source: "w1", target: "m_reply", sourceHandle: "reply" },
+      { id: "e3", source: "w1", target: "m_timeout", sourceHandle: "timeout" },
+    ],
+  };
+
+  it("emits schedule_wait_timeout and sets status to waiting on first visit", () => {
+    const result = step(makeRun(), triggerEvent, flow);
+    const waitAction = result.actions.find((a) => a.type === "schedule_wait_timeout");
+    expect(waitAction).toBeDefined();
+    if (waitAction?.type === "schedule_wait_timeout") {
+      expect(waitAction.durationMs).toBe(1_800_000);
+    }
+    expect(result.nextState.status).toBe("waiting");
+    expect(result.nextState.currentNodeId).toBe("w1");
+  });
+
+  it("follows reply handle when message event resumes", () => {
+    const run = makeRun({ currentNodeId: "w1", status: "running" });
+    const result = step(run, { type: "message", text: "hello" }, flow);
+    const dm = result.actions.find((a) => a.type === "send_dm");
+    expect(dm).toBeDefined();
+    if (dm?.type === "send_dm") expect(dm.text).toBe("Got reply");
+    expect(result.nextState.status).toBe("completed");
+  });
+
+  it("follows timeout handle when timeout event resumes", () => {
+    const run = makeRun({ currentNodeId: "w1", status: "running" });
+    const result = step(run, { type: "timeout" }, flow);
+    const dm = result.actions.find((a) => a.type === "send_dm");
+    expect(dm).toBeDefined();
+    if (dm?.type === "send_dm") expect(dm.text).toBe("Timed out");
+    expect(result.nextState.status).toBe("completed");
+  });
+
+  it("sends timeoutText DM when timing out with timeoutText configured", () => {
+    const flowWithText: FlowDefinition = {
+      nodes: [
+        { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+        { id: "w1", data: { type: "wait_for_reply", timeoutMinutes: 30, timeoutText: "Sorry, you took too long" } },
+        { id: "m_reply", data: { type: "message", messageType: "dm", text: "Got reply" } },
+        { id: "m_timeout", data: { type: "message", messageType: "dm", text: "Timed out" } },
+      ],
+      edges: [
+        { id: "e1", source: "t1", target: "w1" },
+        { id: "e2", source: "w1", target: "m_reply", sourceHandle: "reply" },
+        { id: "e3", source: "w1", target: "m_timeout", sourceHandle: "timeout" },
+      ],
+    };
+
+    const run = makeRun({ currentNodeId: "w1", status: "running" });
+    const result = step(run, { type: "timeout" }, flowWithText);
+    const dms = result.actions.filter((a) => a.type === "send_dm");
+    expect(dms.some((a) => a.type === "send_dm" && a.text === "Sorry, you took too long")).toBe(true);
+    expect(dms.some((a) => a.type === "send_dm" && a.text === "Timed out")).toBe(true);
+  });
+});
+
+describe("Engine step() — HTTP Request node", () => {
+  it("emits http_request action with interpolated URL and body", () => {
+    const flow: FlowDefinition = {
+      nodes: [
+        { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+        { id: "h1", data: { type: "http_request", url: "https://api.example.com/{{name}}", method: "POST", bodyTemplate: '{"email":"{{email}}"}', responseMapping: [{ jsonPath: "$.id", variable: "api_id" }], timeoutMs: 5000 } },
+        { id: "m1", data: { type: "message", messageType: "dm", text: "Done" } },
+      ],
+      edges: [
+        { id: "e1", source: "t1", target: "h1" },
+        { id: "e2", source: "h1", target: "m1" },
+      ],
+    };
+
+    const run = makeRun({ context: { variables: { name: "alice" }, capturedFields: { email: "a@b.com" }, privateReplySent: {}, tags: [] } });
+    const result = step(run, triggerEvent, flow);
+    const httpAction = result.actions.find((a) => a.type === "http_request");
+    expect(httpAction).toBeDefined();
+    if (httpAction?.type === "http_request") {
+      expect(httpAction.url).toBe("https://api.example.com/alice");
+      expect(httpAction.body).toBe('{"email":"a@b.com"}');
+      expect(httpAction.method).toBe("POST");
+      expect(httpAction.responseMapping).toHaveLength(1);
+      expect(httpAction.timeoutMs).toBe(5000);
+    }
+    const dm = result.actions.find((a) => a.type === "send_dm");
+    expect(dm).toBeDefined();
+    if (dm?.type === "send_dm") expect(dm.text).toBe("Done");
+    expect(result.nextState.status).toBe("completed");
+  });
+
+  it("uses GET with no body by default", () => {
+    const flow: FlowDefinition = {
+      nodes: [
+        { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+        { id: "h1", data: { type: "http_request", url: "https://api.example.com/check", method: "GET", timeoutMs: 10000 } },
+      ],
+      edges: [
+        { id: "e1", source: "t1", target: "h1" },
+      ],
+    };
+
+    const result = step(makeRun(), triggerEvent, flow);
+    const httpAction = result.actions.find((a) => a.type === "http_request");
+    expect(httpAction).toBeDefined();
+    if (httpAction?.type === "http_request") {
+      expect(httpAction.method).toBe("GET");
+      expect(httpAction.body).toBeUndefined();
+    }
+  });
+});
+
+describe("Engine step() — AI Reply node", () => {
+  const flow: FlowDefinition = {
+    nodes: [
+      { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+      { id: "a1", data: { type: "ai_reply", systemPrompt: "You are a helpful assistant", maxTokens: 200, fallbackText: "Sorry, I can't help right now" } },
+      { id: "m1", data: { type: "message", messageType: "dm", text: "follow up" } },
+    ],
+    edges: [
+      { id: "e1", source: "t1", target: "a1" },
+      { id: "e2", source: "a1", target: "m1" },
+    ],
+  };
+
+  it("emits ai_reply action and sets status to waiting", () => {
+    const event: IncomingEvent = { type: "trigger", text: "What is your return policy?" };
+    const result = step(makeRun(), event, flow);
+    const aiAction = result.actions.find((a) => a.type === "ai_reply");
+    expect(aiAction).toBeDefined();
+    if (aiAction?.type === "ai_reply") {
+      expect(aiAction.systemPrompt).toBe("You are a helpful assistant");
+      expect(aiAction.contactMessage).toBe("What is your return policy?");
+      expect(aiAction.maxTokens).toBe(200);
+      expect(aiAction.fallbackText).toBe("Sorry, I can't help right now");
+    }
+    expect(result.nextState.status).toBe("waiting");
+    expect(result.nextState.currentNodeId).toBe("m1");
+  });
+
+  it("interpolates variables in systemPrompt", () => {
+    const varFlow: FlowDefinition = {
+      nodes: [
+        { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+        { id: "a1", data: { type: "ai_reply", systemPrompt: "Help {{name}} with their order", maxTokens: 200, fallbackText: "Sorry" } },
+      ],
+      edges: [{ id: "e1", source: "t1", target: "a1" }],
+    };
+
+    const run = makeRun({ context: { variables: { name: "Bob" }, capturedFields: {}, privateReplySent: {}, tags: [] } });
+    const result = step(run, triggerEvent, varFlow);
+    const aiAction = result.actions.find((a) => a.type === "ai_reply");
+    if (aiAction?.type === "ai_reply") {
+      expect(aiAction.systemPrompt).toBe("Help Bob with their order");
+    }
+  });
+
+  it("interpolates fallbackText variables", () => {
+    const varFlow: FlowDefinition = {
+      nodes: [
+        { id: "t1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+        { id: "a1", data: { type: "ai_reply", systemPrompt: "Help", maxTokens: 200, fallbackText: "Sorry {{name}}, try again later" } },
+      ],
+      edges: [{ id: "e1", source: "t1", target: "a1" }],
+    };
+
+    const run = makeRun({ context: { variables: { name: "Bob" }, capturedFields: {}, privateReplySent: {}, tags: [] } });
+    const result = step(run, triggerEvent, varFlow);
+    const aiAction = result.actions.find((a) => a.type === "ai_reply");
+    if (aiAction?.type === "ai_reply") {
+      expect(aiAction.fallbackText).toBe("Sorry Bob, try again later");
+    }
+  });
+});
