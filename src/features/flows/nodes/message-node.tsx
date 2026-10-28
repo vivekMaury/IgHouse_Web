@@ -31,7 +31,7 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} />
+      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
       <div className="flex items-center gap-2 rounded-t-[11px] bg-blue-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-500/20">
           <MessageSquare className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -55,7 +55,7 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={sourceHandle} />
+      <Handle type="source" position={Position.Bottom} style={sourceHandle} isConnectable={true} />
     </div>
   );
 }

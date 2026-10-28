@@ -24,7 +24,7 @@ export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeD
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={handleStyle} />
+      <Handle type="target" position={Position.Top} style={handleStyle} isConnectable={true} />
       <div className="flex items-center gap-2 rounded-t-[11px] bg-violet-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/20">
           <Sparkles className="h-3 w-3 text-violet-600 dark:text-violet-400" />
@@ -41,7 +41,7 @@ export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeD
           Max {data.maxTokens} tokens
         </p>
       </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
     </div>
   );
 }

@@ -124,27 +124,8 @@ function FlowCanvasInner({
   );
 
   const onConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            type: "smoothstep",
-            animated: true,
-            style: {
-              stroke: "hsl(var(--muted-foreground))",
-              strokeWidth: 1.5,
-            },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: "hsl(var(--muted-foreground))",
-              width: 16,
-              height: 16,
-            },
-          },
-          eds,
-        ),
-      );
+    (params: Connection) => {
+      setEdges((eds) => addEdge(params, eds));
     },
     [setEdges],
   );

@@ -36,7 +36,7 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} />
+      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
       <div className="flex items-center gap-2 rounded-t-[11px] bg-teal-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-teal-500/20">
           <Timer className="h-3 w-3 text-teal-600 dark:text-teal-400" />
@@ -58,8 +58,8 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
           Timeout
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} id="reply" style={replyHandle} />
-      <Handle type="source" position={Position.Bottom} id="timeout" style={timeoutHandle} />
+      <Handle type="source" position={Position.Bottom} id="reply" style={replyHandle} isConnectable={true} />
+      <Handle type="source" position={Position.Bottom} id="timeout" style={timeoutHandle} isConnectable={true} />
     </div>
   );
 }

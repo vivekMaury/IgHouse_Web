@@ -44,7 +44,7 @@ export function ConditionNode({ data, selected }: NodeProps & { data: ConditionN
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} />
+      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
       <div className="flex items-center gap-2 rounded-t-[11px] bg-purple-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-500/20">
           <GitBranch className="h-3 w-3 text-purple-600 dark:text-purple-400" />
@@ -71,8 +71,8 @@ export function ConditionNode({ data, selected }: NodeProps & { data: ConditionN
           No
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} id="true" style={trueHandle} />
-      <Handle type="source" position={Position.Bottom} id="false" style={falseHandle} />
+      <Handle type="source" position={Position.Bottom} id="true" style={trueHandle} isConnectable={true} />
+      <Handle type="source" position={Position.Bottom} id="false" style={falseHandle} isConnectable={true} />
     </div>
   );
 }

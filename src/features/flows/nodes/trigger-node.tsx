@@ -61,7 +61,7 @@ export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeD
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
     </div>
   );
 }
