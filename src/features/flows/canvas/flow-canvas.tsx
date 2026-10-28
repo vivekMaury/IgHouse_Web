@@ -9,6 +9,8 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   ConnectionLineType,
   MarkerType,
   type Connection,
@@ -51,7 +53,19 @@ const connectionLineStyle = {
   strokeWidth: 2,
 };
 
-export function FlowCanvas({
+export function FlowCanvas(props: {
+  initialDefinition?: FlowDefinition;
+  onSave: (definition: FlowDefinition) => void;
+  saving?: boolean;
+}) {
+  return (
+    <ReactFlowProvider>
+      <FlowCanvasInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowCanvasInner({
   initialDefinition,
   onSave,
   saving,
@@ -61,6 +75,7 @@ export function FlowCanvas({
   saving?: boolean;
 }) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
     [],
@@ -137,16 +152,24 @@ export function FlowCanvas({
   const handleAddNode = useCallback(
     (data: NodeData) => {
       const id = getNodeId();
+      const wrapper = reactFlowWrapper.current;
+      const rect = wrapper?.getBoundingClientRect();
+      const centerX = rect ? rect.width / 2 : 400;
+      const centerY = rect ? rect.height / 2 : 300;
+      const position = screenToFlowPosition({
+        x: (rect?.left ?? 0) + centerX,
+        y: (rect?.top ?? 0) + centerY,
+      });
       const newNode: Node = {
         id,
         type: data.type,
-        position: { x: 250, y: (nodes.length + 1) * 140 },
+        position,
         data,
       };
       setNodes((nds) => [...nds, newNode]);
       setSelectedNodeId(id);
     },
-    [nodes.length, setNodes],
+    [setNodes, screenToFlowPosition],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
@@ -343,7 +366,6 @@ export function FlowCanvas({
       {/* Config panel */}
       {selectedNode && (
         <NodeConfigPanel
-          nodeId={selectedNode.id}
           data={selectedNode.data as NodeData}
           onChange={(newData) =>
             handleNodeDataChange(selectedNode.id, newData)

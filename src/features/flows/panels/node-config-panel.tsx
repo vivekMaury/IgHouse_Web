@@ -5,18 +5,17 @@ import { Button } from "@/components/ui/button";
 import type { NodeData, TriggerNode, MessageNode, ConditionNode, DelayNode, LeadCaptureNode, WaitForReplyNode, HttpRequestNode, AiReplyNode } from "@/lib/engine/schema";
 
 type Props = {
-  nodeId: string;
   data: NodeData;
   onChange: (data: NodeData) => void;
   onClose: () => void;
   onDelete: () => void;
 };
 
-export function NodeConfigPanel({ nodeId, data, onChange, onClose, onDelete }: Props) {
+export function NodeConfigPanel({ data, onChange, onClose, onDelete }: Props) {
   return (
     <div className="flex h-full w-80 flex-col border-l border-border/60 bg-background">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-        <h3 className="text-sm font-semibold capitalize">{data.type.replace("_", " ")} Config</h3>
+        <h3 className="text-sm font-semibold capitalize">{data.type.replace(/_/g, " ")} Config</h3>
         <div className="flex items-center gap-1">
           <button onClick={onDelete} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Delete node">
             <Trash2 className="h-4 w-4" />
@@ -28,7 +27,6 @@ export function NodeConfigPanel({ nodeId, data, onChange, onClose, onDelete }: P
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <p className="text-[10px] font-mono text-muted-foreground">{nodeId}</p>
 
         {data.type === "trigger" && <TriggerConfig data={data} onChange={(d) => onChange(d)} />}
         {data.type === "message" && <MessageConfig data={data} onChange={(d) => onChange(d)} />}

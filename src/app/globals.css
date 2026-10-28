@@ -260,10 +260,21 @@
 
 /* ─── ReactFlow overrides ────────────────────────────────────────── */
 .react-flow__handle {
-  transition: box-shadow 0.15s ease;
+  width: 12px !important;
+  height: 12px !important;
+  min-width: 12px;
+  min-height: 12px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.react-flow__handle::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
 }
 .react-flow__handle:hover {
   box-shadow: 0 0 0 4px oklch(0.6 0.15 250 / 0.3);
+  transform: scale(1.25);
 }
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--ring) !important;
@@ -277,6 +288,34 @@
 }
 .react-flow__node.selected {
   filter: drop-shadow(0 2px 12px oklch(0 0 0 / 0.12));
+}
+
+/* ─── ReactFlow controls dark theme ─────────────────────────────── */
+.react-flow__controls {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
+  overflow: hidden;
+}
+.react-flow__controls button {
+  background: hsl(var(--card)) !important;
+  border-bottom: 1px solid hsl(var(--border) / 0.5) !important;
+  fill: hsl(var(--foreground)) !important;
+  color: hsl(var(--foreground)) !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+.react-flow__controls button:hover {
+  background: hsl(var(--muted)) !important;
+}
+.react-flow__controls button:last-child {
+  border-bottom: none !important;
+}
+.react-flow__controls button svg {
+  fill: hsl(var(--foreground)) !important;
+  max-width: 14px;
+  max-height: 14px;
 }
 
 @keyframes marketing-float {
