@@ -36,17 +36,40 @@ function getNodeId() {
   return `node_${++nodeIdCounter}_${Date.now()}`;
 }
 
-const defaultEdgeOptions = {
-  type: "smoothstep",
-  animated: true,
-  style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 2 },
-  markerEnd: {
-    type: MarkerType.ArrowClosed,
-    color: "hsl(var(--muted-foreground))",
-    width: 18,
-    height: 18,
-  },
-};
+function isDataHandle(id: string | null | undefined): boolean {
+  return id?.startsWith("data-") ?? false;
+}
+
+function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
+  if (isDataHandle(srcHandle) || isDataHandle(tgtHandle)) {
+    return {
+      type: "default" as const,
+      animated: false,
+      className: "edge-data",
+      style: { stroke: "hsl(var(--primary))", strokeWidth: 2.5 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "hsl(var(--primary))",
+        width: 14,
+        height: 14,
+      },
+    };
+  }
+  return {
+    type: "smoothstep" as const,
+    animated: true,
+    className: "edge-exec",
+    style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 2 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "hsl(var(--muted-foreground))",
+      width: 16,
+      height: 16,
+    },
+  };
+}
+
+const defaultEdgeOptions = edgePropsFor();
 
 const connectionLineStyle = {
   stroke: "hsl(var(--ring))",
@@ -95,7 +118,7 @@ function FlowCanvasInner({
     target: e.target,
     sourceHandle: e.sourceHandle,
     targetHandle: e.targetHandle,
-    ...defaultEdgeOptions,
+    ...edgePropsFor(e.sourceHandle, e.targetHandle),
   }));
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -104,11 +127,15 @@ function FlowCanvasInner({
   const isValidConnection = useCallback(
     (connection: Edge | Connection) => {
       if (connection.source === connection.target) return false;
+      const srcIsData = isDataHandle(connection.sourceHandle);
+      const tgtIsData = isDataHandle(connection.targetHandle);
+      if (srcIsData !== tgtIsData) return false;
       const duplicate = edges.some(
         (e) =>
           e.source === connection.source &&
           e.target === connection.target &&
-          (e.sourceHandle ?? null) === (connection.sourceHandle ?? null),
+          (e.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+          (e.targetHandle ?? null) === (connection.targetHandle ?? null),
       );
       return !duplicate;
     },
@@ -117,7 +144,8 @@ function FlowCanvasInner({
 
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) => addEdge(params, eds));
+      const props = edgePropsFor(params.sourceHandle, params.targetHandle);
+      setEdges((eds) => addEdge({ ...params, ...props }, eds));
     },
     [setEdges],
   );

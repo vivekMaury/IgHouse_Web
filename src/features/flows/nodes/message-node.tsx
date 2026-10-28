@@ -10,8 +10,6 @@ const TYPE_LABELS: Record<string, string> = {
   private_reply: "Private Reply",
 };
 
-const handleStyle = { background: "#3b82f6" };
-
 export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeData }) {
   const preview = data.text ?? data.variants?.[0] ?? "No message set";
   const truncated = preview.length > 60 ? preview.slice(0, 60) + "…" : preview;
@@ -24,7 +22,9 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={handleStyle} isConnectable={true} />
+      {/* Exec in */}
+      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+
       <div className="flex items-center gap-2 rounded-t-[11px] bg-blue-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-500/20">
           <MessageSquare className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -48,7 +48,20 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
+
+      {/* Data port labels */}
+      <div className="flex items-center border-t border-border/30 px-3 py-1">
+        <div className="flex items-center gap-1">
+          <div className="h-1.5 w-1.5 rounded-[2px] bg-primary/60" />
+          <span className="text-[9px] text-muted-foreground/70">Text</span>
+        </div>
+      </div>
+
+      {/* Data in */}
+      <Handle className="handle-data" id="data-in" type="target" position={Position.Left} isConnectable />
+
+      {/* Exec out */}
+      <Handle className="handle-exec" type="source" position={Position.Bottom} isConnectable />
     </div>
   );
 }

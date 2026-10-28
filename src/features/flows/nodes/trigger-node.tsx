@@ -13,8 +13,6 @@ const TRIGGER_LABELS: Record<string, string> = {
   ice_breaker: "Ice Breaker",
 };
 
-const handleStyle = { background: "#f59e0b" };
-
 export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeData }) {
   const keywords = (data.keywords ?? []).filter((k) => k.trim());
 
@@ -56,7 +54,7 @@ export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeD
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
+      <Handle className="handle-exec" type="source" position={Position.Bottom} isConnectable />
     </div>
   );
 }

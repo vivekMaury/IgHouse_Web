@@ -4,8 +4,6 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Sparkles } from "lucide-react";
 import type { AiReplyNode as AiReplyNodeData } from "@/lib/engine/schema";
 
-const handleStyle = { background: "#8b5cf6" };
-
 export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeData }) {
   const truncatedPrompt = data.systemPrompt.length > 40
     ? data.systemPrompt.slice(0, 40) + "…"
@@ -19,7 +17,9 @@ export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeD
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={handleStyle} isConnectable={true} />
+      {/* Exec in */}
+      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+
       <div className="flex items-center gap-2 rounded-t-[11px] bg-violet-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/20">
           <Sparkles className="h-3 w-3 text-violet-600 dark:text-violet-400" />
@@ -36,7 +36,25 @@ export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeD
           Max {data.maxTokens} tokens
         </p>
       </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
+
+      {/* Data port labels */}
+      <div className="flex items-center justify-between border-t border-border/30 px-3 py-1">
+        <div className="flex items-center gap-1">
+          <div className="h-1.5 w-1.5 rounded-[2px] bg-primary/60" />
+          <span className="text-[9px] text-muted-foreground/70">Context</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-muted-foreground/70">AI Text</span>
+          <div className="h-1.5 w-1.5 rounded-[2px] bg-primary/60" />
+        </div>
+      </div>
+
+      {/* Data in / out */}
+      <Handle className="handle-data" id="data-in" type="target" position={Position.Left} isConnectable />
+      <Handle className="handle-data" id="data-out" type="source" position={Position.Right} isConnectable />
+
+      {/* Exec out */}
+      <Handle className="handle-exec" type="source" position={Position.Bottom} isConnectable />
     </div>
   );
 }

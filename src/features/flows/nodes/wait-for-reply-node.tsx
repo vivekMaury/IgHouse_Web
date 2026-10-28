@@ -4,10 +4,6 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Timer } from "lucide-react";
 import type { WaitForReplyNode as WaitForReplyNodeData } from "@/lib/engine/schema";
 
-const targetHandle = { background: "#14b8a6" };
-const replyHandle = { background: "#10b981", left: "25%" };
-const timeoutHandle = { background: "#f59e0b", left: "75%" };
-
 export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitForReplyNodeData }) {
   return (
     <div
@@ -17,7 +13,9 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
+      {/* Exec in */}
+      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+
       <div className="flex items-center gap-2 rounded-t-[11px] bg-teal-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-teal-500/20">
           <Timer className="h-3 w-3 text-teal-600 dark:text-teal-400" />
@@ -31,6 +29,18 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
           Wait {data.timeoutMinutes}m for reply
         </p>
       </div>
+
+      {/* Data port label */}
+      <div className="flex items-center justify-end border-t border-border/30 px-3 py-1">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-muted-foreground/70">Reply</span>
+          <div className="h-1.5 w-1.5 rounded-[2px] bg-primary/60" />
+        </div>
+      </div>
+
+      {/* Data out */}
+      <Handle className="handle-data" id="data-out" type="source" position={Position.Right} isConnectable />
+
       <div className="flex justify-between px-4 pb-2">
         <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
           Reply
@@ -39,8 +49,24 @@ export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitFor
           Timeout
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} id="reply" style={replyHandle} isConnectable={true} />
-      <Handle type="source" position={Position.Bottom} id="timeout" style={timeoutHandle} isConnectable={true} />
+
+      {/* Branch handles — semantic colors */}
+      <Handle
+        className="handle-exec handle-branch"
+        id="reply"
+        type="source"
+        position={Position.Bottom}
+        style={{ background: "#10b981", left: "25%" }}
+        isConnectable
+      />
+      <Handle
+        className="handle-exec handle-branch"
+        id="timeout"
+        type="source"
+        position={Position.Bottom}
+        style={{ background: "#f59e0b", left: "75%" }}
+        isConnectable
+      />
     </div>
   );
 }

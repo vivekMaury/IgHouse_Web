@@ -12,10 +12,6 @@ const FIELD_LABELS: Record<string, string> = {
   custom_field: "Custom Field",
 };
 
-const targetHandle = { background: "#a855f7" };
-const trueHandle = { background: "#10b981", left: "25%" };
-const falseHandle = { background: "#ef4444", left: "75%" };
-
 export function ConditionNode({ data, selected }: NodeProps & { data: ConditionNodeData }) {
   return (
     <div
@@ -25,7 +21,9 @@ export function ConditionNode({ data, selected }: NodeProps & { data: ConditionN
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
+      {/* Exec in */}
+      <Handle className="handle-exec" type="target" position={Position.Top} isConnectable />
+
       <div className="flex items-center gap-2 rounded-t-[11px] bg-purple-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-500/20">
           <GitBranch className="h-3 w-3 text-purple-600 dark:text-purple-400" />
@@ -52,8 +50,24 @@ export function ConditionNode({ data, selected }: NodeProps & { data: ConditionN
           No
         </span>
       </div>
-      <Handle type="source" position={Position.Bottom} id="true" style={trueHandle} isConnectable={true} />
-      <Handle type="source" position={Position.Bottom} id="false" style={falseHandle} isConnectable={true} />
+
+      {/* Branch handles — semantic colors */}
+      <Handle
+        className="handle-exec handle-branch"
+        id="true"
+        type="source"
+        position={Position.Bottom}
+        style={{ background: "#10b981", left: "25%" }}
+        isConnectable
+      />
+      <Handle
+        className="handle-exec handle-branch"
+        id="false"
+        type="source"
+        position={Position.Bottom}
+        style={{ background: "#ef4444", left: "75%" }}
+        isConnectable
+      />
     </div>
   );
 }

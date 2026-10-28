@@ -260,21 +260,19 @@
 
 /* ─── ReactFlow overrides ────────────────────────────────────────── */
 
-/* Handles: large, visible, high z-index so they sit above node content */
+/* ── Handle base ──────────────────────────────────────────────────── */
 .react-flow__handle {
-  width: 14px !important;
-  height: 14px !important;
-  min-width: 14px !important;
-  min-height: 14px !important;
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  min-height: 13px !important;
   border: 2.5px solid white !important;
   border-radius: 50% !important;
   z-index: 20 !important;
   pointer-events: all !important;
   cursor: crosshair !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
-/* Big invisible hit area around handles for easy grabbing */
 .react-flow__handle::after {
   content: "";
   position: absolute;
@@ -284,39 +282,71 @@
   cursor: crosshair;
 }
 
-/* Hover / active state: pulse glow + scale */
-.react-flow__handle:hover,
-.react-flow__handle.connecting {
-  transform: scale(1.5) !important;
-  box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.35), 0 0 12px rgba(139, 92, 246, 0.2);
+/* ── Exec handles — grey circles (control flow) ──────────────────── */
+.react-flow__handle.handle-exec {
+  background: #71717a !important;
+}
+.react-flow__handle.handle-exec:hover,
+.react-flow__handle.handle-exec.connecting {
+  transform: scale(1.45) !important;
+  box-shadow: 0 0 0 5px rgba(113, 113, 122, 0.3), 0 0 10px rgba(113, 113, 122, 0.15);
 }
 
-/* Animated edge dash flow */
+/* ── Data handles — accent rounded-squares (data flow) ───────────── */
+.react-flow__handle.handle-data {
+  background: hsl(var(--primary)) !important;
+  border-radius: 4px !important;
+  width: 11px !important;
+  height: 11px !important;
+  min-width: 11px !important;
+  min-height: 11px !important;
+}
+.react-flow__handle.handle-data:hover,
+.react-flow__handle.handle-data.connecting {
+  transform: scale(1.5) !important;
+  box-shadow: 0 0 0 5px rgba(229, 25, 127, 0.3), 0 0 10px rgba(229, 25, 127, 0.15);
+}
+
+/* ── Branch handles — keep semantic colors ────────────────────────── */
+.react-flow__handle.handle-branch:hover,
+.react-flow__handle.handle-branch.connecting {
+  transform: scale(1.45) !important;
+  box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.3);
+}
+
+/* ── Exec edges — dashed grey, animated flow ─────────────────────── */
+@keyframes exec-dash {
+  to { stroke-dashoffset: -12; }
+}
 .react-flow__edge-path {
   stroke-linecap: round;
 }
-.react-flow__edge.animated .react-flow__edge-path {
-  stroke-dasharray: 6 3;
-  animation: edge-flow 0.6s linear infinite;
-}
-@keyframes edge-flow {
-  to { stroke-dashoffset: -9; }
+.edge-exec .react-flow__edge-path {
+  stroke-dasharray: 8 4 !important;
+  animation: exec-dash 0.7s linear infinite;
 }
 
-/* Connection line while dragging */
+/* ── Data edges — solid accent, no dash ──────────────────────────── */
+.edge-data .react-flow__edge-path {
+  stroke-dasharray: none !important;
+  animation: none !important;
+}
+
+/* ── Connection line while dragging ──────────────────────────────── */
 .react-flow__connection-path {
   stroke-width: 2.5 !important;
   stroke-dasharray: 6 3;
-  animation: edge-flow 0.4s linear infinite;
+  animation: exec-dash 0.4s linear infinite;
 }
 
-/* Selected edge highlight */
+/* ── Selected edge ───────────────────────────────────────────────── */
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--ring) !important;
   stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 3px rgba(229, 25, 127, 0.4));
 }
 
-/* Node card transitions */
+/* ── Node cards ──────────────────────────────────────────────────── */
 .react-flow__node {
   transition: filter 0.15s ease;
 }
