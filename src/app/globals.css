@@ -259,27 +259,64 @@
 }
 
 /* ─── ReactFlow overrides ────────────────────────────────────────── */
+
+/* Handles: large, visible, high z-index so they sit above node content */
 .react-flow__handle {
-  width: 12px !important;
-  height: 12px !important;
-  min-width: 12px;
-  min-height: 12px;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+  border: 2.5px solid white !important;
+  border-radius: 50% !important;
+  z-index: 20 !important;
+  pointer-events: all !important;
+  cursor: crosshair !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
+
+/* Big invisible hit area around handles for easy grabbing */
 .react-flow__handle::after {
   content: "";
   position: absolute;
-  inset: -6px;
+  inset: -10px;
   border-radius: 50%;
+  pointer-events: all;
+  cursor: crosshair;
 }
-.react-flow__handle:hover {
-  box-shadow: 0 0 0 4px oklch(0.6 0.15 250 / 0.3);
-  transform: scale(1.25);
+
+/* Hover / active state: pulse glow + scale */
+.react-flow__handle:hover,
+.react-flow__handle.connecting {
+  transform: scale(1.5) !important;
+  box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.35), 0 0 12px rgba(139, 92, 246, 0.2);
 }
+
+/* Animated edge dash flow */
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 6 3;
+  animation: edge-flow 0.6s linear infinite;
+}
+@keyframes edge-flow {
+  to { stroke-dashoffset: -9; }
+}
+
+/* Connection line while dragging */
+.react-flow__connection-path {
+  stroke-width: 2.5 !important;
+  stroke-dasharray: 6 3;
+  animation: edge-flow 0.4s linear infinite;
+}
+
+/* Selected edge highlight */
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--ring) !important;
   stroke-width: 2.5 !important;
 }
+
+/* Node card transitions */
 .react-flow__node {
   transition: filter 0.15s ease;
 }

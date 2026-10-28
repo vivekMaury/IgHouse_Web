@@ -36,21 +36,21 @@ function getNodeId() {
   return `node_${++nodeIdCounter}_${Date.now()}`;
 }
 
-const defaultEdgeOptions: Omit<Edge, "id" | "source" | "target"> = {
+const defaultEdgeOptions = {
   type: "smoothstep",
   animated: true,
-  style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
+  style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 2 },
   markerEnd: {
     type: MarkerType.ArrowClosed,
     color: "hsl(var(--muted-foreground))",
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 18,
   },
 };
 
 const connectionLineStyle = {
   stroke: "hsl(var(--ring))",
-  strokeWidth: 2,
+  strokeWidth: 2.5,
 };
 
 export function FlowCanvas(props: {
@@ -95,15 +95,7 @@ function FlowCanvasInner({
     target: e.target,
     sourceHandle: e.sourceHandle,
     targetHandle: e.targetHandle,
-    type: "smoothstep",
-    animated: true,
-    style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      color: "hsl(var(--muted-foreground))",
-      width: 16,
-      height: 16,
-    },
+    ...defaultEdgeOptions,
   }));
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -297,6 +289,7 @@ function FlowCanvasInner({
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
+            connectOnClick
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}

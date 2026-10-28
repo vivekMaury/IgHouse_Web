@@ -10,14 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   private_reply: "Private Reply",
 };
 
-const sourceHandle = {
-  width: 10,
-  height: 10,
-  background: "#3b82f6",
-  border: "2px solid white",
-};
-
-const targetHandle = { ...sourceHandle };
+const handleStyle = { background: "#3b82f6" };
 
 export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeData }) {
   const preview = data.text ?? data.variants?.[0] ?? "No message set";
@@ -25,13 +18,13 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
 
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-blue-500 ring-2 ring-blue-500/20"
           : "border-border/60"
       }`}
     >
-      <Handle type="target" position={Position.Top} style={targetHandle} isConnectable={true} />
+      <Handle type="target" position={Position.Top} style={handleStyle} isConnectable={true} />
       <div className="flex items-center gap-2 rounded-t-[11px] bg-blue-500/10 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-500/20">
           <MessageSquare className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -55,7 +48,7 @@ export function MessageNode({ data, selected }: NodeProps & { data: MessageNodeD
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={sourceHandle} isConnectable={true} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} isConnectable={true} />
     </div>
   );
 }

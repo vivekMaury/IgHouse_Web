@@ -4,17 +4,12 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Clock } from "lucide-react";
 import type { DelayNode as DelayNodeData } from "@/lib/engine/schema";
 
-const handleStyle = {
-  width: 10,
-  height: 10,
-  background: "#f97316",
-  border: "2px solid white",
-};
+const handleStyle = { background: "#f97316" };
 
 export function DelayNode({ data, selected }: NodeProps & { data: DelayNodeData }) {
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-orange-500 ring-2 ring-orange-500/20"
           : "border-border/60"

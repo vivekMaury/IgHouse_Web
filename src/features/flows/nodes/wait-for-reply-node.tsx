@@ -4,33 +4,14 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Timer } from "lucide-react";
 import type { WaitForReplyNode as WaitForReplyNodeData } from "@/lib/engine/schema";
 
-const targetHandle = {
-  width: 10,
-  height: 10,
-  background: "#14b8a6",
-  border: "2px solid white",
-};
-
-const replyHandle = {
-  width: 10,
-  height: 10,
-  background: "#10b981",
-  border: "2px solid white",
-  left: "25%",
-};
-
-const timeoutHandle = {
-  width: 10,
-  height: 10,
-  background: "#f59e0b",
-  border: "2px solid white",
-  left: "75%",
-};
+const targetHandle = { background: "#14b8a6" };
+const replyHandle = { background: "#10b981", left: "25%" };
+const timeoutHandle = { background: "#f59e0b", left: "75%" };
 
 export function WaitForReplyNode({ data, selected }: NodeProps & { data: WaitForReplyNodeData }) {
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-teal-500 ring-2 ring-teal-500/20"
           : "border-border/60"

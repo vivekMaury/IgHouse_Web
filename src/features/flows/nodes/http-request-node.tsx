@@ -4,19 +4,14 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Globe } from "lucide-react";
 import type { HttpRequestNode as HttpRequestNodeData } from "@/lib/engine/schema";
 
-const handleStyle = {
-  width: 10,
-  height: 10,
-  background: "#6366f1",
-  border: "2px solid white",
-};
+const handleStyle = { background: "#6366f1" };
 
 export function HttpRequestNode({ data, selected }: NodeProps & { data: HttpRequestNodeData }) {
   const truncatedUrl = data.url.length > 30 ? data.url.slice(0, 30) + "…" : data.url;
 
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-indigo-500 ring-2 ring-indigo-500/20"
           : "border-border/60"

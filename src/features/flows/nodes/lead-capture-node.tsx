@@ -4,12 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { UserPlus } from "lucide-react";
 import type { LeadCaptureNode as LeadCaptureNodeData } from "@/lib/engine/schema";
 
-const handleStyle = {
-  width: 10,
-  height: 10,
-  background: "#10b981",
-  border: "2px solid white",
-};
+const handleStyle = { background: "#10b981" };
 
 export function LeadCaptureNode({ data, selected }: NodeProps & { data: LeadCaptureNodeData }) {
   const prompt =
@@ -19,7 +14,7 @@ export function LeadCaptureNode({ data, selected }: NodeProps & { data: LeadCapt
 
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-emerald-500 ring-2 ring-emerald-500/20"
           : "border-border/60"

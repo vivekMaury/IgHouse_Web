@@ -4,12 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Sparkles } from "lucide-react";
 import type { AiReplyNode as AiReplyNodeData } from "@/lib/engine/schema";
 
-const handleStyle = {
-  width: 10,
-  height: 10,
-  background: "#8b5cf6",
-  border: "2px solid white",
-};
+const handleStyle = { background: "#8b5cf6" };
 
 export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeData }) {
   const truncatedPrompt = data.systemPrompt.length > 40
@@ -18,7 +13,7 @@ export function AiReplyNode({ data, selected }: NodeProps & { data: AiReplyNodeD
 
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-violet-500 ring-2 ring-violet-500/20"
           : "border-border/60"

@@ -12,33 +12,14 @@ const FIELD_LABELS: Record<string, string> = {
   custom_field: "Custom Field",
 };
 
-const targetHandle = {
-  width: 10,
-  height: 10,
-  background: "#a855f7",
-  border: "2px solid white",
-};
-
-const trueHandle = {
-  width: 10,
-  height: 10,
-  background: "#10b981",
-  border: "2px solid white",
-  left: "25%",
-};
-
-const falseHandle = {
-  width: 10,
-  height: 10,
-  background: "#ef4444",
-  border: "2px solid white",
-  left: "75%",
-};
+const targetHandle = { background: "#a855f7" };
+const trueHandle = { background: "#10b981", left: "25%" };
+const falseHandle = { background: "#ef4444", left: "75%" };
 
 export function ConditionNode({ data, selected }: NodeProps & { data: ConditionNodeData }) {
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-purple-500 ring-2 ring-purple-500/20"
           : "border-border/60"

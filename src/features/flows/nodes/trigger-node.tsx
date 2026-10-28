@@ -13,19 +13,14 @@ const TRIGGER_LABELS: Record<string, string> = {
   ice_breaker: "Ice Breaker",
 };
 
-const handleStyle = {
-  width: 10,
-  height: 10,
-  background: "#f59e0b",
-  border: "2px solid white",
-};
+const handleStyle = { background: "#f59e0b" };
 
 export function TriggerNode({ data, selected }: NodeProps & { data: TriggerNodeData }) {
   const keywords = (data.keywords ?? []).filter((k) => k.trim());
 
   return (
     <div
-      className={`w-56 rounded-xl border bg-card transition-all duration-150 ${
+      className={`relative w-56 rounded-xl border bg-card transition-all duration-150 ${
         selected
           ? "border-amber-500 ring-2 ring-amber-500/20"
           : "border-border/60"
