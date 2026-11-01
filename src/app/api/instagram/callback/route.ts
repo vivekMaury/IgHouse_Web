@@ -6,6 +6,7 @@ import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   getInstagramProfile,
+  subscribeInstagramWebhooks,
 } from "@/lib/meta/instagram";
 import { encryptToken } from "@/lib/crypto/token";
 
@@ -137,6 +138,14 @@ export async function GET(request: Request) {
   } catch (err) {
     console.error("[ig-callback] Encryption failed:", (err as Error).message);
     return NextResponse.redirect(`${settingsUrl}?error=encryption_failed`);
+  }
+
+  // Enable message delivery for this account after app-level webhook fields are configured.
+  try {
+    await subscribeInstagramWebhooks(igUserId, longToken);
+  } catch (err) {
+    console.error("[ig-callback] Webhook subscription failed:", (err as Error).message);
+    return NextResponse.redirect(`${settingsUrl}?error=webhook_subscription_failed`);
   }
 
   // Step 6: Save to DB using service role (bypasses RLS)

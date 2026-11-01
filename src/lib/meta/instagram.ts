@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const GRAPH_API_BASE = "https://graph.instagram.com";
+const GRAPH_API_VERSION = "v21.0";
 
 const SCOPES = [
   "instagram_business_basic",
@@ -89,6 +90,35 @@ export async function refreshLongLivedToken(
   }
 
   return (await res.json()) as { access_token: string; expires_in: number };
+}
+
+export async function subscribeInstagramWebhooks(
+  instagramAccountId: string,
+  accessToken: string,
+): Promise<void> {
+  const fields = ["messages", "messaging_postbacks"];
+  const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
+  const res = await fetch(
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  let response: { success?: boolean; error?: { message?: string } };
+  try {
+    response = (await res.json()) as typeof response;
+  } catch {
+    throw new Error(`Instagram webhook subscription failed (HTTP ${res.status}).`);
+  }
+
+  if (!res.ok || response.success !== true) {
+    const message = response.error?.message;
+    throw new Error(
+      `Instagram webhook subscription failed${message ? `: ${message}` : ` (HTTP ${res.status})`}`,
+    );
+  }
 }
 
 export async function getInstagramProfile(

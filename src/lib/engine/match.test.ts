@@ -58,6 +58,12 @@ describe("matchFlows", () => {
     expect(matchFlows(event, flows)).toHaveLength(1);
   });
 
+  it("matches the DM keyword Hii case-insensitively", () => {
+    const flows = [makeFlow("f1", "dm_keyword", ["Hii"])];
+    const event: MatchableEvent = { eventType: "message", text: "hii" };
+    expect(matchFlows(event, flows)).toHaveLength(1);
+  });
+
   it("does not match dm_keyword on comment event", () => {
     const flows = [makeFlow("f1", "dm_keyword", ["pricing"])];
     const event: MatchableEvent = { eventType: "comment", text: "pricing" };

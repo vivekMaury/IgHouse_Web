@@ -78,6 +78,8 @@ export default async function SettingsPage({
               ? "Failed to exchange Instagram token. Please try again."
               : error === "db_save_failed"
                 ? "Failed to save account. Please try again."
+                : error === "webhook_subscription_failed"
+                  ? "Could not enable Instagram message notifications. Check that the Meta app is Live and the messages webhook field is configured, then reconnect the account."
                 : error === "encryption_failed"
                   ? "Server encryption error. Please contact support."
                   : `Connection error: ${error}`}
