@@ -271,7 +271,7 @@
   z-index: 20 !important;
   pointer-events: all !important;
   cursor: crosshair !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, scale 0.15s ease, box-shadow 0.15s ease;
 }
 .react-flow__handle::after {
   content: "";
@@ -288,13 +288,13 @@
 }
 .react-flow__handle.handle-exec:hover,
 .react-flow__handle.handle-exec.connecting {
-  transform: scale(1.45) !important;
+  scale: 1.45;
   box-shadow: 0 0 0 5px rgba(113, 113, 122, 0.3), 0 0 10px rgba(113, 113, 122, 0.15);
 }
 
 /* ── Data handles — accent rounded-squares (data flow) ───────────── */
 .react-flow__handle.handle-data {
-  background: hsl(var(--primary)) !important;
+  background: var(--primary) !important;
   border-radius: 4px !important;
   width: 11px !important;
   height: 11px !important;
@@ -303,14 +303,14 @@
 }
 .react-flow__handle.handle-data:hover,
 .react-flow__handle.handle-data.connecting {
-  transform: scale(1.5) !important;
+  scale: 1.5;
   box-shadow: 0 0 0 5px rgba(229, 25, 127, 0.3), 0 0 10px rgba(229, 25, 127, 0.15);
 }
 
 /* ── Branch handles — keep semantic colors ────────────────────────── */
 .react-flow__handle.handle-branch:hover,
 .react-flow__handle.handle-branch.connecting {
-  transform: scale(1.45) !important;
+  scale: 1.45;
   box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.3);
 }
 
@@ -355,28 +355,29 @@
 
 /* ─── ReactFlow controls dark theme ─────────────────────────────── */
 .react-flow__controls {
-  background: hsl(var(--card)) !important;
-  border: 1px solid hsl(var(--border)) !important;
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 0.5rem !important;
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
   overflow: hidden;
 }
 .react-flow__controls button {
-  background: hsl(var(--card)) !important;
-  border-bottom: 1px solid hsl(var(--border) / 0.5) !important;
-  fill: hsl(var(--foreground)) !important;
-  color: hsl(var(--foreground)) !important;
+  background: var(--card) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent) !important;
+  fill: var(--foreground) !important;
+  color: var(--foreground) !important;
   width: 28px !important;
   height: 28px !important;
 }
 .react-flow__controls button:hover {
-  background: hsl(var(--muted)) !important;
+  background: var(--muted) !important;
 }
 .react-flow__controls button:last-child {
   border-bottom: none !important;
 }
 .react-flow__controls button svg {
-  fill: hsl(var(--foreground)) !important;
+  fill: currentColor !important;
+  color: var(--foreground) !important;
   max-width: 14px;
   max-height: 14px;
 }

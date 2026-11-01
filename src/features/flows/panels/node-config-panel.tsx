@@ -2,6 +2,13 @@
 
 import { X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select as SelectRoot,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { NodeData, TriggerNode, MessageNode, ConditionNode, DelayNode, LeadCaptureNode, WaitForReplyNode, HttpRequestNode, AiReplyNode } from "@/lib/engine/schema";
 
 type Props = {
@@ -59,15 +66,27 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string 
 
 function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
-    <select
+    <SelectRoot
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="flex h-8 w-full rounded-md border border-border/60 bg-transparent px-2.5 text-xs shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      onValueChange={(selectedValue) => {
+        if (typeof selectedValue === "string") onChange(selectedValue);
+      }}
     >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+      <SelectTrigger className="!h-8 !w-full !bg-background text-xs text-foreground hover:!bg-muted">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="!border-zinc-700 !bg-zinc-900 !text-zinc-100">
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className="!text-zinc-100 data-[highlighted]:!bg-zinc-800 data-[highlighted]:!text-white"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </SelectRoot>
   );
 }
 

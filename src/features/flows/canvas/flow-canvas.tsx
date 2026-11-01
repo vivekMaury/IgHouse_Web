@@ -46,10 +46,10 @@ function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
       type: "smoothstep" as const,
       animated: false,
       className: "edge-data",
-      style: { stroke: "hsl(var(--primary))", strokeWidth: 2.5 },
+      style: { stroke: "var(--primary)", strokeWidth: 2.5 },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: "hsl(var(--primary))",
+        color: "var(--primary)",
         width: 14,
         height: 14,
       },
@@ -60,13 +60,13 @@ function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
     animated: false,
     className: "edge-exec",
     style: {
-      stroke: "hsl(var(--muted-foreground))",
+      stroke: "var(--muted-foreground)",
       strokeWidth: 1.75,
       strokeDasharray: "6 5",
     },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: "hsl(var(--muted-foreground))",
+      color: "var(--muted-foreground)",
       width: 16,
       height: 16,
     },
@@ -76,7 +76,7 @@ function edgePropsFor(srcHandle?: string | null, tgtHandle?: string | null) {
 const defaultEdgeOptions = edgePropsFor();
 
 const connectionLineStyle = {
-  stroke: "hsl(var(--ring))",
+  stroke: "var(--ring)",
   strokeWidth: 2.5,
 };
 
