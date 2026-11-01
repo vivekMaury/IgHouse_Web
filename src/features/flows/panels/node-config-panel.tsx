@@ -20,7 +20,7 @@ type Props = {
 
 export function NodeConfigPanel({ data, onChange, onClose, onDelete }: Props) {
   return (
-    <div className="flex h-full w-80 flex-col border-l border-border/60 bg-background">
+    <div className="absolute inset-x-0 bottom-0 z-30 flex h-[min(72dvh,38rem)] w-full flex-col border-t border-border/60 bg-background shadow-2xl md:static md:h-full md:w-80 md:shrink-0 md:border-l md:border-t-0 md:shadow-none">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <h3 className="text-sm font-semibold capitalize">{data.type.replace(/_/g, " ")} Config</h3>
         <div className="flex items-center gap-1">

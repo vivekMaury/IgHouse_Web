@@ -12,6 +12,7 @@ import {
   Play,
   Pause,
   Inbox,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -55,7 +56,7 @@ export default function InboxPage() {
 
   if (!workspaceId) {
     return (
-      <div className="-m-6 flex h-screen items-center justify-center">
+      <div className="-m-3 flex h-[calc(100dvh-3.5rem)] items-center justify-center sm:-m-4 md:-m-6 md:h-dvh">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
@@ -67,9 +68,9 @@ export default function InboxPage() {
     "Unknown";
 
   return (
-    <div className="-m-6 flex" style={{ height: "100vh" }}>
+    <div className="-m-3 flex h-[calc(100dvh-3.5rem)] min-h-0 overflow-hidden sm:-m-4 md:-m-6 md:h-dvh">
       {/* Conversation list */}
-      <div className="w-80 shrink-0">
+      <div className={`${selectedConv ? "hidden md:block" : "block"} w-full shrink-0 md:w-80`}>
         <ConversationList
           workspaceId={workspaceId}
           selectedId={selectedConv?.id ?? null}
@@ -78,12 +79,20 @@ export default function InboxPage() {
       </div>
 
       {/* Message area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`${selectedConv ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}>
         {selectedConv ? (
           <>
             {/* Conversation header */}
-            <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
-              <div className="flex items-center gap-3">
+            <div className="flex min-h-14 items-center justify-between gap-2 border-b border-border/60 px-3 py-2 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedConv(null)}
+                  aria-label="Back to conversations"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted md:hidden"
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
                 {selectedConv.contacts?.avatar_url ? (
                   <Image
                     src={selectedConv.contacts.avatar_url}
@@ -99,7 +108,7 @@ export default function InboxPage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-medium">{contactName}</p>
+                  <p className="truncate text-sm font-medium">{contactName}</p>
                   <div className="flex items-center gap-1.5 text-xs">
                     {botPaused ? (
                       <span className="flex items-center gap-1 text-amber-600">
@@ -115,14 +124,14 @@ export default function InboxPage() {
                   </div>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={toggleBot}>
+              <Button variant="outline" size="sm" onClick={toggleBot} className="shrink-0">
                 {botPaused ? (
                   <>
-                    <Play className="mr-1 h-3 w-3" /> Resume Bot
+                    <Play className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Resume Bot</span>
                   </>
                 ) : (
                   <>
-                    <Pause className="mr-1 h-3 w-3" /> Pause Bot
+                    <Pause className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Pause Bot</span>
                   </>
                 )}
               </Button>

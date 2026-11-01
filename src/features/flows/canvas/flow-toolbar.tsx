@@ -103,12 +103,12 @@ export function FlowToolbar({
   onAddNode: (data: NodeData) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex min-w-0 items-center gap-1 overflow-x-auto py-0.5">
       {NODE_TEMPLATES.map((tpl) => (
         <button
           key={tpl.label}
           onClick={() => onAddNode(tpl.data)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-xs font-medium text-foreground/80 transition-all hover:text-foreground active:scale-95 ${tpl.bg}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-xs font-medium text-foreground/80 transition-all hover:text-foreground active:scale-95 ${tpl.bg}`}
         >
           <tpl.icon className={`h-3.5 w-3.5 ${tpl.color}`} />
           {tpl.label}

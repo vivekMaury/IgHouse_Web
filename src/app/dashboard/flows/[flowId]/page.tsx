@@ -84,16 +84,16 @@ export default function FlowEditorPage() {
   const isDraft = flow.status === "draft";
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
-        <div className="flex items-center gap-3">
+    <div className="-m-3 flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col sm:-m-4 md:-m-6 md:h-dvh">
+      <div className="flex flex-col gap-2 border-b border-border/60 px-3 py-2 sm:px-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             onClick={() => router.push("/dashboard/flows")}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
           >
             &larr; Flows
           </button>
-          <span className="text-sm font-medium">{flow.name}</span>
+          <span className="truncate text-sm font-medium">{flow.name}</span>
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               isPublished
@@ -107,7 +107,7 @@ export default function FlowEditorPage() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isPublished && (
             <button
               onClick={() => handleStatusChange("paused")}
@@ -153,7 +153,7 @@ export default function FlowEditorPage() {
         </div>
       </div>
 
-      <div className="flex-1">
+      <div className="min-h-0 flex-1">
         <FlowCanvas
           initialDefinition={flow.definition ?? undefined}
           onSave={handleSave}

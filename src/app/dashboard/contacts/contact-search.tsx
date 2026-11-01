@@ -87,7 +87,7 @@ export function ContactSearch({
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {filters.map((f) => (
             <button
               key={f.key}
@@ -141,7 +141,7 @@ export function ContactSearch({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border/60">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[700px] text-sm">
             <thead>
               <tr className="border-b border-border/60 bg-muted/30">
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Contact</th>
