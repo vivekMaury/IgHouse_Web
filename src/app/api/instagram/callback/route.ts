@@ -9,6 +9,7 @@ import {
   subscribeInstagramWebhooks,
 } from "@/lib/meta/instagram";
 import { encryptToken } from "@/lib/crypto/token";
+import { inngest } from "@/lib/inngest/client";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -156,7 +157,7 @@ export async function GET(request: Request) {
 
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-    const { error: upsertError } = await admin.from("connected_accounts").upsert(
+    const { data: upsertedRow, error: upsertError } = await admin.from("connected_accounts").upsert(
       {
         workspace_id: storedState.workspaceId,
         platform: "instagram",
@@ -175,14 +176,27 @@ export async function GET(request: Request) {
         is_active: true,
       } as Record<string, unknown>,
       { onConflict: "workspace_id,platform,platform_account_id" }
-    );
+    ).select("id").single();
 
-    if (upsertError) {
+    if (upsertError || !upsertedRow) {
       console.error("[ig-callback] DB upsert error:", upsertError);
       return NextResponse.redirect(`${settingsUrl}?error=db_save_failed`);
     }
 
+    const connectedAccountId = (upsertedRow as { id: string }).id;
     console.log("[ig-callback] Account saved successfully for @" + username);
+
+    // Dispatch historical conversation sync (non-blocking)
+    void inngest.send({
+      name: "instagram/account.connected",
+      data: {
+        workspaceId: storedState.workspaceId,
+        connectedAccountId,
+        igUserId,
+      },
+    }).catch((err) => {
+      console.error("[ig-callback] Failed to dispatch sync event:", err);
+    });
 
     // Audit log (non-blocking)
     void admin.from("audit_logs").insert({

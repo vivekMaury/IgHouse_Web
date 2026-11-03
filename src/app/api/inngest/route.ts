@@ -2,8 +2,9 @@ import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
 import { refreshExpiredTokens } from "@/lib/inngest/functions/refresh-tokens";
 import { processWebhookEvent } from "@/lib/inngest/functions/process-webhook";
+import { syncConversations } from "@/lib/inngest/functions/sync-conversations";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [refreshExpiredTokens, processWebhookEvent],
+  functions: [refreshExpiredTokens, processWebhookEvent, syncConversations],
 });
