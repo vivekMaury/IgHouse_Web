@@ -1,9 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Camera, CheckCircle2, AlertTriangle, Trash2 } from "lucide-react";
+import { Camera, CheckCircle2, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type ConnectedAccount = {
   id: string;
@@ -35,6 +36,7 @@ function getTokenStatus(expiresAt: string | null): {
 export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[] }) {
   const router = useRouter();
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState<string | null>(null);
 
   async function handleDisconnect(accountId: string) {
     setDisconnecting(accountId);
@@ -49,6 +51,27 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
       }
     } finally {
       setDisconnecting(null);
+    }
+  }
+
+  async function handleSync(accountId: string) {
+    setSyncing(accountId);
+    try {
+      const res = await fetch("/api/instagram/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      if (res.ok) {
+        toast.success("Inbox sync started. Conversations will appear shortly.");
+      } else {
+        const data = (await res.json()) as { error?: string };
+        toast.error(data.error ?? "Failed to start sync");
+      }
+    } catch {
+      toast.error("Failed to start sync");
+    } finally {
+      setSyncing(null);
     }
   }
 
@@ -115,15 +138,27 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
                   </div>
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDisconnect(account.id)}
-                  disabled={disconnecting === account.id}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSync(account.id)}
+                    disabled={syncing === account.id}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className={`h-4 w-4${syncing === account.id ? " animate-spin" : ""}`} />
+                    <span className="ml-1 hidden sm:inline">Sync Inbox</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDisconnect(account.id)}
+                    disabled={disconnecting === account.id}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             );
           })}
