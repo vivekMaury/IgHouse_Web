@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-hub-signature-256");
 
   if (!verifyWebhookSignature(rawBody, signature)) {
+    console.error("[webhook] Signature verification failed. signature:", signature?.slice(0, 20) + "...");
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
@@ -43,15 +44,25 @@ export async function POST(request: Request) {
   }
 
   if (body.object !== "instagram") {
+    console.error("[webhook] Ignored non-instagram object:", body.object);
     return NextResponse.json({ error: "Not instagram" }, { status: 400 });
   }
 
   const events = parseWebhookPayload(body);
+  console.log(`[webhook] Parsed ${events.length} event(s) from ${body.entry.length} entry/entries`);
+
+  if (events.length === 0) {
+    console.log("[webhook] No actionable events in payload (read/delivery receipts or echoes)");
+  }
 
   if (events.length > 0) {
     const supabase = createAdminClient();
 
     for (const event of events) {
+      console.log(
+        `[webhook] Processing: type=${event.event_type} igAccount=${event.ig_account_id} sender=${event.sender_id} eventId=${event.platform_event_id}`,
+      );
+
       const { error } = await supabase.from("webhook_events").upsert(
         {
           platform_event_id: event.platform_event_id,
@@ -63,19 +74,24 @@ export async function POST(request: Request) {
       );
 
       if (error && !error.message.includes("duplicate")) {
-        console.error("Failed to insert webhook event:", error.message);
+        console.error("[webhook] Failed to insert webhook_event:", error.message, "eventId:", event.platform_event_id);
         continue;
       }
 
-      await inngest.send({
-        name: "instagram/webhook.received",
-        data: {
-          webhookEventId: event.platform_event_id,
-          eventType: event.event_type,
-          igAccountId: event.ig_account_id,
-          senderId: event.sender_id,
-        },
-      });
+      try {
+        await inngest.send({
+          name: "instagram/webhook.received",
+          data: {
+            webhookEventId: event.platform_event_id,
+            eventType: event.event_type,
+            igAccountId: event.ig_account_id,
+            senderId: event.sender_id,
+          },
+        });
+        console.log(`[webhook] Dispatched to Inngest: ${event.platform_event_id}`);
+      } catch (err) {
+        console.error("[webhook] Inngest dispatch failed:", err, "eventId:", event.platform_event_id);
+      }
     }
   }
 

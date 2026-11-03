@@ -45,13 +45,19 @@ export async function exchangeCodeForToken(
     body: body.toString(),
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Instagram token exchange failed: ${res.status} ${text}`);
   }
 
-  const data = (await res.json()) as { access_token: string; user_id: number };
-  return { access_token: data.access_token, user_id: String(data.user_id) };
+  // Parse user_id from raw text to avoid JavaScript number precision loss.
+  // Instagram user IDs are 17-18 digits, exceeding Number.MAX_SAFE_INTEGER.
+  const userIdMatch = text.match(/"user_id"\s*:\s*(\d+)/);
+  const data = JSON.parse(text) as { access_token: string };
+  const userId = userIdMatch?.[1] ?? String((JSON.parse(text) as { user_id: number }).user_id);
+
+  return { access_token: data.access_token, user_id: userId };
 }
 
 export async function exchangeForLongLivedToken(

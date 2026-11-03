@@ -198,6 +198,7 @@ export const processWebhookEvent = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { webhookEventId, eventType, igAccountId, senderId } = event.data as WebhookEventData;
+    console.log(`[inngest] Processing webhook: eventId=${webhookEventId} type=${eventType} igAccount=${igAccountId} sender=${senderId}`);
 
     const supabase = createAdminClient();
 
@@ -209,9 +210,15 @@ export const processWebhookEvent = inngest.createFunction(
         .eq("platform_event_id", webhookEventId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error(`[inngest] Failed to load webhook_event: ${error.message} eventId=${webhookEventId}`);
+        throw error;
+      }
       const row = data as Record<string, unknown>;
-      if (row.status === "processed") return null;
+      if (row.status === "processed") {
+        console.log(`[inngest] Skipping already-processed event: ${webhookEventId}`);
+        return null;
+      }
 
       await supabase
         .from("webhook_events")
@@ -227,19 +234,32 @@ export const processWebhookEvent = inngest.createFunction(
     const account = await step.run("resolve-account", async () => {
       const { data } = await supabase
         .from("connected_accounts")
-        .select("id, workspace_id, is_active")
+        .select("id, workspace_id, is_active, platform_account_id")
         .eq("platform_account_id", igAccountId)
         .eq("is_active", true)
         .limit(1);
 
-      const row = (data ?? [])[0] as { id: string; workspace_id: string; is_active: boolean } | undefined;
+      const rows = data ?? [];
+      const row = rows[0] as { id: string; workspace_id: string; is_active: boolean; platform_account_id: string } | undefined;
       if (!row) {
+        // Log all accounts to diagnose ID mismatches (e.g. precision loss)
+        const { data: allAccounts } = await supabase
+          .from("connected_accounts")
+          .select("platform_account_id, is_active")
+          .limit(10);
+        console.error(
+          `[inngest] No active account for igAccountId=${igAccountId}. ` +
+          `Stored accounts: ${JSON.stringify((allAccounts ?? []).map((a: Record<string, unknown>) => ({ id: a.platform_account_id, active: a.is_active })))}`,
+        );
+
         await supabase
           .from("webhook_events")
-          .update({ status: "failed", last_error: "No active account found" } as Record<string, unknown>)
+          .update({ status: "failed", last_error: `No active account for igAccountId=${igAccountId}` } as Record<string, unknown>)
           .eq("platform_event_id", webhookEventId);
         return null;
       }
+
+      console.log(`[inngest] Resolved account: id=${row.id} workspace=${row.workspace_id} platform_account_id=${row.platform_account_id}`);
 
       await supabase
         .from("webhook_events")
@@ -253,7 +273,7 @@ export const processWebhookEvent = inngest.createFunction(
 
     // 3. Upsert contact
     const contact = await step.run("upsert-contact", async () => {
-      const { data } = await supabase
+      const { data, error: contactErr } = await supabase
         .from("contacts")
         .upsert(
           { workspace_id: account.workspace_id, platform_scoped_id: senderId } as Record<string, unknown>,
@@ -262,10 +282,17 @@ export const processWebhookEvent = inngest.createFunction(
         .select("id, opted_out, email, phone")
         .single();
 
+      if (contactErr) {
+        console.error(`[inngest] Contact upsert failed: ${contactErr.message} sender=${senderId}`);
+      } else {
+        console.log(`[inngest] Contact upserted: id=${(data as Record<string, unknown>)?.id} sender=${senderId}`);
+      }
+
       return data as { id: string; opted_out: boolean; email: string | null; phone: string | null } | null;
     });
 
     if (!contact || contact.opted_out) {
+      console.log(`[inngest] Skipping: ${contact ? "contact opted out" : "contact upsert returned null"} sender=${senderId}`);
       await step.run("mark-skipped", async () => {
         await supabase
           .from("webhook_events")
@@ -296,7 +323,11 @@ export const processWebhookEvent = inngest.createFunction(
           .single();
 
         const conversation = conversations as { id: string; bot_paused: boolean; bot_paused_until: string | null } | null;
-        if (!conversation) return { botPaused: false };
+        if (!conversation) {
+          console.error(`[inngest] Conversation upsert returned null for contact=${contact.id} account=${account.id}`);
+          return { botPaused: false };
+        }
+        console.log(`[inngest] Conversation upserted: id=${conversation.id} botPaused=${conversation.bot_paused}`);
 
         // Auto-resume if pause has expired
         let paused = conversation.bot_paused;
@@ -313,7 +344,7 @@ export const processWebhookEvent = inngest.createFunction(
         const payload = webhookEvent.payload as Record<string, unknown>;
         const message = payload.message as Record<string, unknown> | undefined;
 
-        await supabase.from("messages").insert({
+        const { error: msgErr } = await supabase.from("messages").insert({
           workspace_id: account.workspace_id,
           conversation_id: conversation.id,
           direction: "inbound",
@@ -322,6 +353,12 @@ export const processWebhookEvent = inngest.createFunction(
           platform_message_id: webhookEventId,
           sent_at: new Date().toISOString(),
         } as Record<string, unknown>);
+
+        if (msgErr) {
+          console.error(`[inngest] Message insert failed: ${msgErr.message} conv=${conversation.id}`);
+        } else {
+          console.log(`[inngest] Message inserted: conv=${conversation.id} text="${((message?.text as string) ?? "").slice(0, 40)}"`);
+        }
 
         await supabase.rpc("increment_unread", { conversation_id: conversation.id } as Record<string, unknown>);
 

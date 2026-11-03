@@ -45,6 +45,10 @@ export function parseWebhookPayload(body: WebhookPayload): ParsedEvent[] {
   const events: ParsedEvent[] = [];
 
   for (const entry of body.entry) {
+    // entry.id is always the subscribing business account's Instagram ID,
+    // regardless of message direction. More reliable than msg.recipient.id.
+    const igAccountId = entry.id;
+
     if (entry.messaging) {
       for (const msg of entry.messaging) {
         if (msg.message?.is_echo) continue;
@@ -53,7 +57,7 @@ export function parseWebhookPayload(body: WebhookPayload): ParsedEvent[] {
           events.push({
             platform_event_id: msg.message.mid,
             event_type: "message",
-            ig_account_id: msg.recipient.id,
+            ig_account_id: igAccountId,
             sender_id: msg.sender.id,
             payload: msg as unknown as Record<string, unknown>,
           });
@@ -63,7 +67,7 @@ export function parseWebhookPayload(body: WebhookPayload): ParsedEvent[] {
           events.push({
             platform_event_id: msg.postback.mid,
             event_type: "postback",
-            ig_account_id: msg.recipient.id,
+            ig_account_id: igAccountId,
             sender_id: msg.sender.id,
             payload: msg as unknown as Record<string, unknown>,
           });
