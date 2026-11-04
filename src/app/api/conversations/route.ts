@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("conversations")
-    .select("id, status, bot_paused, bot_paused_until, assigned_to, last_message_at, unread_count, contact_id, connected_account_id, contacts(id, full_name, username, avatar_url, platform_scoped_id)")
+    .select("id, status, bot_paused, bot_paused_until, assigned_to, last_message_at, unread_count, contact_id, connected_account_id, contacts!contact_id(id, full_name, username, avatar_url, platform_scoped_id)")
     .eq("workspace_id", member.workspace_id)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);

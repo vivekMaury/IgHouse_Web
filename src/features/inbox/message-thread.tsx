@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { Send, AlertTriangle, Bot, UserRound } from "lucide-react";
+import { Send, AlertTriangle, Bot, UserRound, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
 
 type Message = {
   id: string;
@@ -28,6 +27,58 @@ function sanitize(text: string): string {
     const map: Record<string, string> = { "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;" };
     return map[c] ?? c;
   });
+}
+
+const IMAGE_TYPES = new Set(["image", "animated_image", "sticker", "lightweight_action"]);
+const VIDEO_TYPES = new Set(["video", "ig_reel"]);
+
+function MediaAttachment({ url, type }: { url: string; type: string | null }) {
+  const [broken, setBroken] = useState(false);
+
+  if (broken) {
+    return (
+      <div className="flex items-center gap-1.5 rounded bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+        <ImageOff className="h-3.5 w-3.5" />
+        <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
+          Media unavailable — open original
+        </a>
+      </div>
+    );
+  }
+
+  if (IMAGE_TYPES.has(type ?? "")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        className="max-w-full max-h-72 rounded"
+        loading="lazy"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+
+  if (VIDEO_TYPES.has(type ?? "")) {
+    return (
+      <video
+        src={url}
+        controls
+        className="max-w-full max-h-72 rounded"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+
+  if (type === "audio") {
+    return <audio src={url} controls className="w-full" onError={() => setBroken(true)} />;
+  }
+
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs underline">
+      View attachment
+    </a>
+  );
 }
 
 export function MessageThread({
@@ -173,18 +224,7 @@ export function MessageThread({
               )}
               {msg.media_url && (
                 <div className="mt-1">
-                  {msg.media_type === "image" ? (
-                    <Image src={msg.media_url} alt="" width={300} height={200} className="max-w-full rounded" unoptimized />
-                  ) : (
-                    <a
-                      href={msg.media_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs underline"
-                    >
-                      View media
-                    </a>
-                  )}
+                  <MediaAttachment url={msg.media_url} type={msg.media_type} />
                 </div>
               )}
               <div className="mt-1 flex items-center gap-1 text-[10px] opacity-60">

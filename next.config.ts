@@ -15,6 +15,15 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.fbcdn.net" },
+      { protocol: "https", hostname: "**.cdninstagram.com" },
+      { protocol: "https", hostname: "**.facebook.com" },
+      { protocol: "https", hostname: "lookaside.fbsbx.com" },
+      { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
+    ],
+  },
   turbopack: {
     rules: {
       "*.css": {
