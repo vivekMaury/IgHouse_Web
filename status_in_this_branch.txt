@@ -1,0 +1,6 @@
+
+Abhi tak ke status ke mutabiq:
+
+* **Kya-kya ho chuka hai (Achieved):** Auth, Workspace setup, Instagram OAuth, Webhook pipeline, Contact enrichment, Message history sync, Flow Builder UI & CRUD, Execution Engine, Live Inbox with Realtime updates, Media handling, aur Settings/Logs.
+* **Kya-kya bacha hai (Remaining P0):** Comment-to-DM aur Story mention trigger testing, Flow builder UX polish (undo/redo, validation), Error/retry handling (exponential backoff), Token refresh automation (60-day expiry), Connection health UI, Landing page + SEO, aur Playwright E2E tests. Iske baad P1 (Billing/Razorpay, Analytics, Templates) aur P2 (AI Agent, Broadcasts) par move karna hoga.
+
