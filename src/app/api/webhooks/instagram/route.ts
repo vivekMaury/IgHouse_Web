@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature, verifyGetChallenge } from "@/lib/meta/webhook-verify";
-import { parseWebhookPayload, type WebhookPayload } from "@/lib/meta/parse-webhook";
+import { parseWebhookPayload, type ParsedEvent, type WebhookPayload } from "@/lib/meta/parse-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { inngest } from "@/lib/inngest/client";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
@@ -19,6 +18,113 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+async function handleMessageEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  event: ParsedEvent,
+) {
+  const payload = event.payload as Record<string, unknown>;
+  const message = payload.message as { mid: string; text?: string; attachments?: Array<{ type: string; payload: { url: string } }> } | undefined;
+  const timestamp = payload.timestamp as number | undefined;
+
+  const messageText = message?.text ?? null;
+  const firstAttachment = message?.attachments?.[0];
+  const mediaUrl = firstAttachment?.payload?.url ?? null;
+  const mediaType = firstAttachment?.type ?? null;
+
+  // 1. Look up connected account by the IG account ID that received the webhook
+  const { data: account, error: accountErr } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id")
+    .eq("platform_account_id", event.ig_account_id)
+    .eq("platform", "instagram")
+    .eq("is_active", true)
+    .single();
+
+  if (accountErr || !account) {
+    console.error("[webhook:sync] No connected account for ig_account_id:", event.ig_account_id, accountErr?.message);
+    return;
+  }
+
+  const { workspace_id, id: connected_account_id } = account;
+
+  // 2. Upsert the sender as a contact
+  const { data: contact, error: contactErr } = await supabase
+    .from("contacts")
+    .upsert(
+      {
+        workspace_id,
+        platform_scoped_id: event.sender_id,
+      },
+      { onConflict: "workspace_id,platform_scoped_id" }
+    )
+    .select("id")
+    .single();
+
+  if (contactErr || !contact) {
+    console.error("[webhook:sync] Failed to upsert contact:", contactErr?.message, "sender:", event.sender_id);
+    return;
+  }
+
+  // 3. Get or create the conversation thread
+  const { data: conversation, error: convoErr } = await supabase
+    .from("conversations")
+    .upsert(
+      {
+        workspace_id,
+        contact_id: contact.id,
+        connected_account_id,
+        status: "open",
+      },
+      { onConflict: "workspace_id,contact_id,connected_account_id" }
+    )
+    .select("id")
+    .single();
+
+  if (convoErr || !conversation) {
+    console.error("[webhook:sync] Failed to upsert conversation:", convoErr?.message, "contact:", contact.id);
+    return;
+  }
+
+  // 4. Insert the inbound message
+  const sentAt = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+
+  const { error: msgErr } = await supabase.from("messages").insert({
+    workspace_id,
+    conversation_id: conversation.id,
+    direction: "inbound" as const,
+    source: "human" as const,
+    content: messageText,
+    media_url: mediaUrl,
+    media_type: mediaType,
+    platform_message_id: event.platform_event_id,
+    metadata: {},
+    sent_at: sentAt,
+  });
+
+  if (msgErr) {
+    console.error("[webhook:sync] Failed to insert message:", msgErr.message, "mid:", event.platform_event_id);
+    return;
+  }
+
+  // 5. Update conversation last_message_at and increment unread count
+  await supabase
+    .from("conversations")
+    .update({ last_message_at: sentAt })
+    .eq("id", conversation.id);
+
+  await supabase.rpc("increment_unread", { conversation_id: conversation.id });
+
+  // 6. Update last_webhook_at on the connected account
+  await supabase
+    .from("connected_accounts")
+    .update({ last_webhook_at: new Date().toISOString() })
+    .eq("id", connected_account_id);
+
+  console.log(
+    `[webhook:sync] Saved inbound message mid=${event.platform_event_id} contact=${contact.id} conversation=${conversation.id}`,
+  );
 }
 
 export async function POST(request: Request) {
@@ -63,6 +169,7 @@ export async function POST(request: Request) {
         `[webhook] Processing: type=${event.event_type} igAccount=${event.ig_account_id} sender=${event.sender_id} eventId=${event.platform_event_id}`,
       );
 
+      // Log the raw webhook event for debugging
       const { error } = await supabase.from("webhook_events").upsert(
         {
           platform_event_id: event.platform_event_id,
@@ -78,19 +185,15 @@ export async function POST(request: Request) {
         continue;
       }
 
-      try {
-        await inngest.send({
-          name: "instagram/webhook.received",
-          data: {
-            webhookEventId: event.platform_event_id,
-            eventType: event.event_type,
-            igAccountId: event.ig_account_id,
-            senderId: event.sender_id,
-          },
-        });
-        console.log(`[webhook] Dispatched to Inngest: ${event.platform_event_id}`);
-      } catch (err) {
-        console.error("[webhook] Inngest dispatch failed:", err, "eventId:", event.platform_event_id);
+      // Synchronous processing: handle message events directly (bypassing Inngest)
+      if (event.event_type === "message") {
+        try {
+          await handleMessageEvent(supabase, event);
+        } catch (err) {
+          console.error("[webhook:sync] Unhandled error processing message:", err, "eventId:", event.platform_event_id);
+        }
+      } else {
+        console.log(`[webhook] Skipping non-message event type: ${event.event_type} (sync mode only handles messages)`);
       }
     }
   }
