@@ -6,6 +6,10 @@ import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { fetchIgUserProfile } from "@/lib/meta/instagram";
 import { decryptToken } from "@/lib/crypto/token";
 import { syncConversationHistory } from "@/lib/meta/sync-history";
+import { matchFlows, type MatchableEvent } from "@/lib/engine/match";
+import { step as engineStep, type FlowRunState, type IncomingEvent, type Action } from "@/lib/engine/step";
+import { executeAction, type SendContext } from "@/lib/meta/send";
+import type { FlowDefinition } from "@/lib/engine/schema";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,6 +25,410 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+type FlowContext = {
+  workspaceId: string;
+  connectedAccountId: string;
+  contactId: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  senderId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  webhookEventId: string;
+  accessToken: string;
+};
+
+function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent {
+  const message = payload.message as Record<string, unknown> | undefined;
+  return {
+    eventType: eventType as MatchableEvent["eventType"],
+    text: (message?.text as string) ?? undefined,
+    postbackPayload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
+    commentId: eventType === "comment" ? (payload.id as string) : undefined,
+    mediaId: (payload.media as Record<string, unknown>)?.id as string | undefined,
+  };
+}
+
+function buildIncomingEvent(
+  eventType: string,
+  payload: Record<string, unknown>,
+  contact: { email?: string; phone?: string; tags: string[] },
+): IncomingEvent {
+  const message = payload.message as Record<string, unknown> | undefined;
+  return {
+    type: eventType === "comment" || eventType === "mention" ? "trigger" : (eventType as IncomingEvent["type"]),
+    text: (message?.text as string) ?? undefined,
+    payload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
+    commentId: eventType === "comment" ? (payload.id as string) : undefined,
+    senderId: (payload.sender as Record<string, unknown>)?.id as string ?? undefined,
+    contactEmail: contact.email,
+    contactPhone: contact.phone,
+    contactTags: contact.tags,
+  };
+}
+
+async function getContactTags(
+  supabase: ReturnType<typeof createAdminClient>,
+  contactId: string,
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("contact_tags")
+    .select("tags!inner(name)")
+    .eq("contact_id", contactId);
+
+  return (data ?? []).map((row) => {
+    const tag = row as unknown as { tags: { name: string } };
+    return tag.tags.name;
+  });
+}
+
+async function runAutomationFlows(
+  supabase: ReturnType<typeof createAdminClient>,
+  ctx: FlowContext,
+) {
+  // 1. Check for existing waiting flow run (lead capture / wait-for-reply)
+  const { data: waitingRunRows } = await supabase
+    .from("flow_runs")
+    .select("id, flow_id, flow_version_id, current_node_id, status, context")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("contact_id", ctx.contactId)
+    .eq("status", "waiting")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const waitingRun = (waitingRunRows ?? [])[0] as {
+    id: string;
+    flow_id: string;
+    flow_version_id: string;
+    current_node_id: string | null;
+    status: string;
+    context: Record<string, unknown>;
+  } | undefined;
+
+  if (waitingRun) {
+    console.log(`[webhook:flow] Resuming waiting flow run=${waitingRun.id} flow=${waitingRun.flow_id}`);
+
+    const { data: versionData } = await supabase
+      .from("flow_versions")
+      .select("definition")
+      .eq("id", waitingRun.flow_version_id)
+      .single();
+
+    if (versionData) {
+      const flowDef = (versionData as { definition: unknown }).definition as FlowDefinition;
+      const contactTags = await getContactTags(supabase, ctx.contactId);
+
+      const runState: FlowRunState = {
+        id: waitingRun.id,
+        flowId: waitingRun.flow_id,
+        contactId: ctx.contactId,
+        currentNodeId: waitingRun.current_node_id,
+        status: "running",
+        context: {
+          variables: (waitingRun.context.variables as Record<string, string>) ?? {},
+          capturedFields: (waitingRun.context.capturedFields as Record<string, string>) ?? {},
+          privateReplySent: (waitingRun.context.privateReplySent as Record<string, boolean>) ?? {},
+          tags: (waitingRun.context.tags as string[]) ?? [],
+        },
+      };
+
+      const incomingEvent = buildIncomingEvent(ctx.eventType, ctx.payload, {
+        email: ctx.contactEmail ?? undefined,
+        phone: ctx.contactPhone ?? undefined,
+        tags: contactTags,
+      });
+
+      const result = engineStep(runState, incomingEvent, flowDef);
+
+      const sendCtx: SendContext = { accessToken: ctx.accessToken, recipientId: ctx.senderId };
+      const metaResponses = await executeFlowActions(result.actions, sendCtx, supabase, ctx);
+
+      await writeAutomationLogs(supabase, result.actions, ctx.workspaceId, waitingRun.flow_id, waitingRun.id, metaResponses);
+      await recordOutboundMessages(supabase, result.actions, metaResponses, ctx);
+
+      await supabase
+        .from("flow_runs")
+        .update({
+          current_node_id: result.nextState.currentNodeId,
+          status: result.nextState.status,
+          context: result.nextState.context,
+          completed_at: result.nextState.status === "completed" || result.nextState.status === "failed"
+            ? new Date().toISOString()
+            : null,
+        } as Record<string, unknown>)
+        .eq("id", waitingRun.id);
+
+      console.log(`[webhook:flow] Resumed flow run=${waitingRun.id} newStatus=${result.nextState.status} actions=${result.actions.length}`);
+    }
+    return;
+  }
+
+  // 2. Match triggers against published flows
+  const { data: flows } = await supabase
+    .from("flows")
+    .select("id, flow_versions!inner(id, definition)")
+    .eq("workspace_id", ctx.workspaceId)
+    .eq("status", "published")
+    .not("flow_versions.published_at", "is", null)
+    .order("created_at", { foreignTable: "flow_versions", ascending: false });
+
+  if (!flows?.length) {
+    console.log("[webhook:flow] No published flows for workspace:", ctx.workspaceId);
+    return;
+  }
+
+  const matchableEvent = buildMatchableEvent(ctx.eventType, ctx.payload);
+
+  const matchableFlows = (flows as Array<{ id: string; flow_versions: Array<{ id: string; definition: unknown }> }>)
+    .filter((f) => f.flow_versions.length > 0)
+    .map((f) => ({
+      id: f.id,
+      versionId: f.flow_versions[0]!.id,
+      definition: f.flow_versions[0]!.definition as FlowDefinition,
+    }));
+
+  const matchResults = matchFlows(
+    matchableEvent,
+    matchableFlows.map((f) => ({ id: f.id, definition: f.definition })),
+  );
+
+  if (matchResults.length === 0) {
+    console.log(`[webhook:flow] No matching flows for text="${matchableEvent.text?.slice(0, 40) ?? ""}" workspace=${ctx.workspaceId}`);
+    return;
+  }
+
+  console.log(`[webhook:flow] Matched ${matchResults.length} flow(s) for text="${matchableEvent.text?.slice(0, 40) ?? ""}"`);
+
+  // 3. Execute matched flows
+  for (const match of matchResults) {
+    const flow = matchableFlows.find((f) => f.id === match.flowId)!;
+
+    // Cooldown check
+    const triggerNode = flow.definition.nodes.find((n) => n.data.type === "trigger");
+    const cooldownHours = triggerNode?.data.type === "trigger" ? (triggerNode.data.cooldownHours ?? 24) : 24;
+
+    if (cooldownHours > 0) {
+      const since = new Date(Date.now() - cooldownHours * 3600_000).toISOString();
+      const { data: recentRuns } = await supabase
+        .from("flow_runs")
+        .select("id")
+        .eq("flow_id", match.flowId)
+        .eq("contact_id", ctx.contactId)
+        .gte("started_at", since)
+        .limit(1);
+
+      if (recentRuns?.length) {
+        console.log(`[webhook:flow] Cooldown active for flow=${match.flowId} contact=${ctx.contactId}`);
+        continue;
+      }
+    }
+
+    // Cancel existing running/waiting runs for this contact
+    await supabase
+      .from("flow_runs")
+      .update({ status: "cancelled", completed_at: new Date().toISOString() } as Record<string, unknown>)
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("contact_id", ctx.contactId)
+      .in("status", ["running", "waiting"]);
+
+    // Run the engine
+    const contactTags = await getContactTags(supabase, ctx.contactId);
+
+    const initialState: FlowRunState = {
+      id: "",
+      flowId: match.flowId,
+      contactId: ctx.contactId,
+      currentNodeId: null,
+      status: "running",
+      context: {
+        variables: {},
+        capturedFields: {},
+        privateReplySent: {},
+        tags: contactTags,
+      },
+    };
+
+    const incomingEvent = buildIncomingEvent(ctx.eventType, ctx.payload, {
+      email: ctx.contactEmail ?? undefined,
+      phone: ctx.contactPhone ?? undefined,
+      tags: contactTags,
+    });
+
+    const result = engineStep(initialState, incomingEvent, flow.definition);
+
+    // Insert flow_run
+    const { data: runData } = await supabase
+      .from("flow_runs")
+      .insert({
+        workspace_id: ctx.workspaceId,
+        flow_id: match.flowId,
+        flow_version_id: flow.versionId,
+        contact_id: ctx.contactId,
+        current_node_id: result.nextState.currentNodeId,
+        status: result.nextState.status,
+        context: result.nextState.context,
+        trigger_event_id: ctx.webhookEventId,
+      } as Record<string, unknown>)
+      .select("id")
+      .single();
+
+    const runId = (runData as { id: string } | null)?.id ?? "unknown";
+
+    // Execute Meta API actions
+    const sendCtx: SendContext = { accessToken: ctx.accessToken, recipientId: ctx.senderId };
+    const metaResponses = await executeFlowActions(result.actions, sendCtx, supabase, ctx);
+
+    await writeAutomationLogs(supabase, result.actions, ctx.workspaceId, match.flowId, runId, metaResponses);
+    await recordOutboundMessages(supabase, result.actions, metaResponses, ctx);
+
+    if (result.nextState.status === "completed" || result.nextState.status === "failed") {
+      await supabase
+        .from("flow_runs")
+        .update({ completed_at: new Date().toISOString() } as Record<string, unknown>)
+        .eq("id", runId);
+    }
+
+    console.log(
+      `[webhook:flow] Executed flow=${match.flowId} run=${runId} status=${result.nextState.status} ` +
+      `actions=${result.actions.length} sends=${[...metaResponses.values()].filter((r) => r.success).length}`,
+    );
+  }
+}
+
+async function executeFlowActions(
+  actions: Action[],
+  sendCtx: SendContext,
+  supabase: ReturnType<typeof createAdminClient>,
+  ctx: FlowContext,
+): Promise<Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>> {
+  const metaResponses = new Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>();
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]!;
+
+    if (action.type === "send_dm" || action.type === "send_comment_reply" || action.type === "send_private_reply") {
+      const result = await executeAction(action, sendCtx);
+      metaResponses.set(i, result);
+
+      if (result.success) {
+        console.log(`[webhook:flow] Sent ${action.type}: "${action.text.slice(0, 60)}"`);
+      } else {
+        console.error(`[webhook:flow] Failed ${action.type}: ${result.error}`);
+      }
+
+      if (!result.success && result.statusCode === 429) {
+        console.error("[webhook:flow] Rate limited by Meta API, stopping action execution");
+        break;
+      }
+    }
+
+    if (action.type === "capture_lead") {
+      await supabase.from("captured_leads").insert({
+        workspace_id: ctx.workspaceId,
+        contact_id: ctx.contactId,
+        flow_id: ctx.connectedAccountId,
+        field_name: action.field,
+        field_value: action.value,
+      } as Record<string, unknown>);
+
+      const updateField = action.field === "email" ? "email" : "phone";
+      await supabase
+        .from("contacts")
+        .update({ [updateField]: action.value } as Record<string, unknown>)
+        .eq("id", ctx.contactId);
+    }
+  }
+
+  return metaResponses;
+}
+
+async function writeAutomationLogs(
+  supabase: ReturnType<typeof createAdminClient>,
+  actions: Action[],
+  workspaceId: string,
+  flowId: string,
+  flowRunId: string,
+  metaResponses: Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>,
+) {
+  const logRows = actions
+    .filter((a): a is Extract<Action, { type: "log" }> => a.type === "log")
+    .map((a, i) => {
+      const meta = metaResponses.get(i);
+      return {
+        workspace_id: workspaceId,
+        flow_run_id: flowRunId,
+        flow_id: flowId,
+        node_id: a.nodeId,
+        action: a.action,
+        success: meta ? meta.success : a.success,
+        error_message: meta?.error ?? a.error ?? null,
+        meta_response: meta?.response ?? null,
+      };
+    });
+
+  if (logRows.length > 0) {
+    const { error } = await supabase.from("automation_logs").insert(logRows as Record<string, unknown>[]);
+    if (error) {
+      console.error("[webhook:flow] Failed to write automation logs:", error.message);
+    }
+  }
+}
+
+async function recordOutboundMessages(
+  supabase: ReturnType<typeof createAdminClient>,
+  actions: Action[],
+  metaResponses: Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>,
+  ctx: FlowContext,
+) {
+  const msgRows: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]!;
+    if (action.type !== "send_dm" && action.type !== "send_private_reply") continue;
+
+    const meta = metaResponses.get(i);
+    if (meta && !meta.success) continue;
+
+    msgRows.push({
+      workspace_id: ctx.workspaceId,
+      direction: "outbound",
+      source: "automation",
+      content: action.text,
+      sent_at: new Date().toISOString(),
+      platform_message_id: (meta?.response?.message_id as string) ?? null,
+    });
+  }
+
+  if (msgRows.length === 0) return;
+
+  const { data: conv } = await supabase
+    .from("conversations")
+    .upsert(
+      {
+        workspace_id: ctx.workspaceId,
+        contact_id: ctx.contactId,
+        connected_account_id: ctx.connectedAccountId,
+        last_message_at: new Date().toISOString(),
+        status: "open",
+      } as Record<string, unknown>,
+      { onConflict: "workspace_id,contact_id,connected_account_id" },
+    )
+    .select("id")
+    .single();
+
+  if (!conv) return;
+  const conversationId = (conv as { id: string }).id;
+
+  for (const row of msgRows) {
+    row.conversation_id = conversationId;
+  }
+
+  const { error } = await supabase.from("messages").insert(msgRows);
+  if (error) {
+    console.error("[webhook:flow] Failed to record outbound messages:", error.message);
+  }
 }
 
 async function handleMessageEvent(
@@ -81,11 +489,18 @@ async function handleMessageEvent(
       },
       { onConflict: "workspace_id,platform_scoped_id" }
     )
-    .select("id")
+    .select("id, opted_out, email, phone")
     .single();
 
   if (contactErr || !contact) {
     console.error("[webhook:sync] Failed to upsert contact:", contactErr?.message, "sender:", event.sender_id);
+    return;
+  }
+
+  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+
+  if (typedContact.opted_out) {
+    console.log("[webhook:sync] Contact opted out, skipping:", event.sender_id);
     return;
   }
 
@@ -121,12 +536,26 @@ async function handleMessageEvent(
       },
       { onConflict: "workspace_id,contact_id,connected_account_id" }
     )
-    .select("id")
+    .select("id, bot_paused, bot_paused_until")
     .single();
 
   if (convoErr || !conversation) {
     console.error("[webhook:sync] Failed to upsert conversation:", convoErr?.message, "contact:", contact.id);
     return;
+  }
+
+  const typedConversation = conversation as { id: string; bot_paused: boolean; bot_paused_until: string | null };
+
+  // Auto-resume bot if pause has expired
+  let botPaused = typedConversation.bot_paused;
+  if (botPaused && typedConversation.bot_paused_until) {
+    if (new Date(typedConversation.bot_paused_until) < new Date()) {
+      await supabase
+        .from("conversations")
+        .update({ bot_paused: false, bot_paused_until: null } as Record<string, unknown>)
+        .eq("id", typedConversation.id);
+      botPaused = false;
+    }
   }
 
   // 4. Insert the inbound message
@@ -168,7 +597,29 @@ async function handleMessageEvent(
     `[webhook:sync] Saved inbound message mid=${event.platform_event_id} contact=${contact.id} conversation=${conversation.id}`,
   );
 
-  // 7. Auto-sync history for new conversations (fire-and-forget)
+  // 7. Execute automation flows (if bot not paused and token available)
+  if (!botPaused && accessToken) {
+    try {
+      await runAutomationFlows(supabase, {
+        workspaceId: workspace_id,
+        connectedAccountId: connected_account_id,
+        contactId: typedContact.id,
+        contactEmail: typedContact.email,
+        contactPhone: typedContact.phone,
+        senderId: event.sender_id,
+        eventType: event.event_type,
+        payload: event.payload,
+        webhookEventId: event.platform_event_id,
+        accessToken,
+      });
+    } catch (err) {
+      console.error("[webhook:flow] Unhandled error in flow execution:", (err as Error).message, "eventId:", event.platform_event_id);
+    }
+  } else if (botPaused) {
+    console.log(`[webhook:flow] Skipping automation — bot paused for conversation=${conversation.id}`);
+  }
+
+  // 8. Auto-sync history for new conversations (fire-and-forget)
   if (accessToken) {
     const { data: msgCountRows } = await supabase
       .from("messages")
