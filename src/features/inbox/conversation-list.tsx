@@ -69,6 +69,15 @@ export function ConversationList({
   }, [filter]);
 
   useEffect(() => {
+    function refresh() {
+      fetch(`/api/conversations?filter=${filter}&limit=50`)
+        .then((res) => res.json())
+        .then((data: { conversations: Conversation[] }) =>
+          setConversations(data.conversations),
+        )
+        .catch(() => {});
+    }
+
     const supabase = createClient();
     const channel = supabase
       .channel(`conversations:${workspaceId}`)
@@ -80,17 +89,23 @@ export function ConversationList({
           table: "conversations",
           filter: `workspace_id=eq.${workspaceId}`,
         },
-        () => {
-          fetch(`/api/conversations?filter=${filter}&limit=50`)
-            .then((res) => res.json())
-            .then((data: { conversations: Conversation[] }) =>
-              setConversations(data.conversations),
-            );
+        () => { refresh(); },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
         },
+        () => { refresh(); },
       )
       .subscribe();
 
+    const poll = setInterval(refresh, 5000);
+
     return () => {
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [workspaceId, filter]);

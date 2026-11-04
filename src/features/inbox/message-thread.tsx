@@ -159,15 +159,21 @@ export function MessageThread({
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          setMessages((prev) => [...prev, newMsg]);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
         }
       )
       .subscribe();
 
+    const poll = setInterval(() => { loadMessages(); }, 4000);
+
     return () => {
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, loadMessages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

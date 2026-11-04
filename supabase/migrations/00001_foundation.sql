@@ -334,3 +334,9 @@ begin
   where id = conversation_id;
 end;
 $$;
+
+--------------------------------------------------------------------------------
+-- Supabase Realtime: publish messages & conversations for live UI updates
+--------------------------------------------------------------------------------
+alter publication supabase_realtime add table public.messages;
+alter publication supabase_realtime add table public.conversations;
