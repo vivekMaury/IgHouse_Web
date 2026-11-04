@@ -117,16 +117,25 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${settingsUrl}?error=token_exchange_failed`);
   }
 
-  // Step 4: Get Instagram profile
+  // Step 4: Get Instagram profile (required — the IGSID from /me is the
+  // canonical ID that webhook entry.id uses, not the app-scoped igUserId)
+  let igBusinessAccountId: string;
   let username = "unknown";
   let avatarUrl: string | null = null;
   try {
     const profile = await getInstagramProfile(longToken);
+    igBusinessAccountId = profile.id;
     username = profile.username;
     avatarUrl = profile.profile_picture_url ?? null;
-    console.log("[ig-callback] Profile fetched:", username);
+    console.log("[ig-callback] Profile fetched:", username, "igBusinessAccountId:", igBusinessAccountId);
   } catch (err) {
-    console.error("[ig-callback] Profile fetch failed (continuing):", (err as Error).message);
+    console.error("[ig-callback] Profile fetch failed:", (err as Error).message);
+    return NextResponse.redirect(`${settingsUrl}?error=profile_fetch_failed`);
+  }
+
+  if (!igBusinessAccountId) {
+    console.error("[ig-callback] Could not resolve Instagram Business Account ID from /me endpoint");
+    return NextResponse.redirect(`${settingsUrl}?error=missing_ig_business_id`);
   }
 
   // Step 5: Encrypt token
@@ -143,7 +152,7 @@ export async function GET(request: Request) {
 
   // Enable message delivery for this account after app-level webhook fields are configured.
   try {
-    await subscribeInstagramWebhooks(igUserId, longToken);
+    await subscribeInstagramWebhooks(igBusinessAccountId, longToken);
   } catch (err) {
     console.error("[ig-callback] Webhook subscription failed:", (err as Error).message);
     return NextResponse.redirect(`${settingsUrl}?error=webhook_subscription_failed`);
@@ -161,7 +170,7 @@ export async function GET(request: Request) {
       {
         workspace_id: storedState.workspaceId,
         platform: "instagram",
-        platform_account_id: igUserId,
+        platform_account_id: igBusinessAccountId,
         username,
         avatar_url: avatarUrl,
         encrypted_access_token: `\\x${encryptedHex}`,
@@ -192,7 +201,7 @@ export async function GET(request: Request) {
       data: {
         workspaceId: storedState.workspaceId,
         connectedAccountId,
-        igUserId,
+        igUserId: igBusinessAccountId,
       },
     }).catch((err) => {
       console.error("[ig-callback] Failed to dispatch sync event:", err);
@@ -204,7 +213,7 @@ export async function GET(request: Request) {
       actor_id: userId,
       action: "account.connected",
       entity_type: "connected_account",
-      entity_id: igUserId,
+      entity_id: igBusinessAccountId,
       metadata: { platform: "instagram", username },
       ip_address: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
     } as Record<string, unknown>);
