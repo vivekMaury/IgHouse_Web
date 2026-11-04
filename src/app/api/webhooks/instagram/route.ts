@@ -171,8 +171,7 @@ async function runAutomationFlows(
     .select("id, flow_versions!inner(id, definition)")
     .eq("workspace_id", ctx.workspaceId)
     .eq("status", "published")
-    .not("flow_versions.published_at", "is", null)
-    .order("created_at", { foreignTable: "flow_versions", ascending: false });
+    .order("version", { referencedTable: "flow_versions", ascending: false });
 
   if (!flows?.length) {
     console.log("[webhook:flow] No published flows for workspace:", ctx.workspaceId);
