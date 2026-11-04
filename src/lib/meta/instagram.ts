@@ -127,6 +127,27 @@ export async function subscribeInstagramWebhooks(
   }
 }
 
+export async function fetchIgUserProfile(
+  userId: string,
+  accessToken: string,
+): Promise<{ name?: string; username?: string; profile_pic?: string }> {
+  const params = new URLSearchParams({
+    fields: "name,username,profile_pic",
+    access_token: accessToken,
+  });
+
+  const res = await fetch(
+    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(userId)}?${params}`,
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`IG user profile fetch failed for ${userId}: ${res.status} ${text}`);
+  }
+
+  return (await res.json()) as { name?: string; username?: string; profile_pic?: string };
+}
+
 export async function getInstagramProfile(
   token: string
 ): Promise<{ id: string; username: string; profile_picture_url?: string }> {

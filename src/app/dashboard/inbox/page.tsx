@@ -63,6 +63,7 @@ export default function InboxPage() {
   }
 
   const contactName =
+    selectedConv?.contacts?.full_name ??
     selectedConv?.contacts?.username ??
     selectedConv?.contacts?.platform_scoped_id ??
     "Unknown";

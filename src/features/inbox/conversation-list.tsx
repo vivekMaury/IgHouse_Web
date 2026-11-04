@@ -16,6 +16,7 @@ export type Conversation = {
   contact_id: string;
   contacts: {
     id: string;
+    full_name: string | null;
     username: string | null;
     avatar_url: string | null;
     platform_scoped_id: string;
@@ -134,6 +135,7 @@ export function ConversationList({
         ) : (
           conversations.map((conv) => {
             const username =
+              conv.contacts?.full_name ??
               conv.contacts?.username ??
               conv.contacts?.platform_scoped_id ??
               "Unknown";

@@ -3,6 +3,8 @@ import { verifyWebhookSignature, verifyGetChallenge } from "@/lib/meta/webhook-v
 import { parseWebhookPayload, type ParsedEvent, type WebhookPayload } from "@/lib/meta/parse-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { fetchIgUserProfile } from "@/lib/meta/instagram";
+import { decryptToken } from "@/lib/crypto/token";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -37,7 +39,7 @@ async function handleMessageEvent(
   const igAccountId = String(event.ig_account_id);
   const { data: account, error: accountErr } = await supabase
     .from("connected_accounts")
-    .select("id, workspace_id")
+    .select("id, workspace_id, encrypted_access_token, token_iv")
     .eq("platform_account_id", igAccountId)
     .eq("platform", "instagram")
     .eq("is_active", true)
@@ -71,6 +73,31 @@ async function handleMessageEvent(
   if (contactErr || !contact) {
     console.error("[webhook:sync] Failed to upsert contact:", contactErr?.message, "sender:", event.sender_id);
     return;
+  }
+
+  // 2b. Enrich contact with Instagram profile (non-blocking for message flow)
+  try {
+    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
+    const ivHex = (account as Record<string, unknown>).token_iv as string;
+    const accessToken = decryptToken(
+      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+    );
+
+    const profile = await fetchIgUserProfile(event.sender_id, accessToken);
+    const updates: Record<string, unknown> = {};
+    if (profile.username) updates.username = profile.username;
+    if (profile.name) updates.full_name = profile.name;
+    if (profile.profile_pic) updates.avatar_url = profile.profile_pic;
+
+    if (Object.keys(updates).length > 0) {
+      await supabase
+        .from("contacts")
+        .update(updates)
+        .eq("id", contact.id);
+    }
+  } catch (err) {
+    console.warn("[webhook:sync] Profile enrichment failed for sender:", event.sender_id, (err as Error).message);
   }
 
   // 3. Get or create the conversation thread
