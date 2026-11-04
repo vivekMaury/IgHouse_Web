@@ -34,16 +34,22 @@ async function handleMessageEvent(
   const mediaType = firstAttachment?.type ?? null;
 
   // 1. Look up connected account by the IG account ID that received the webhook
+  const igAccountId = String(event.ig_account_id);
   const { data: account, error: accountErr } = await supabase
     .from("connected_accounts")
     .select("id, workspace_id")
-    .eq("platform_account_id", event.ig_account_id)
+    .eq("platform_account_id", igAccountId)
     .eq("platform", "instagram")
     .eq("is_active", true)
-    .single();
+    .maybeSingle();
 
-  if (accountErr || !account) {
-    console.error("[webhook:sync] No connected account for ig_account_id:", event.ig_account_id, accountErr?.message);
+  if (accountErr) {
+    console.error("[webhook:sync] DB error looking up connected account for ig_account_id:", igAccountId, accountErr.message);
+    return;
+  }
+
+  if (!account) {
+    console.warn("[webhook:sync] No connected account found for ig_account_id:", igAccountId, "— skipping event");
     return;
   }
 
