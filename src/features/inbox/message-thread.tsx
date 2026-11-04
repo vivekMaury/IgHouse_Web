@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { Send, AlertTriangle, Bot, UserRound, RefreshCw } from "lucide-react";
+import { Send, AlertTriangle, Bot, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
@@ -40,7 +40,6 @@ export function MessageThread({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [windowClosed, setWindowClosed] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async () => {
@@ -59,22 +58,9 @@ export function MessageThread({
     }
   }, [conversationId]);
 
-  const syncHistory = useCallback(async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch(`/api/conversations/${conversationId}/sync`, { method: "POST" });
-      if (res.ok) {
-        await loadMessages();
-      }
-    } catch {
-      // Sync failures are non-critical
-    }
-    setSyncing(false);
-  }, [conversationId, loadMessages]);
-
   useEffect(() => {
     let cancelled = false;
-    async function fetchInitial() {
+    async function fetchAndSync() {
       const res = await fetch(`/api/conversations/${conversationId}/messages?limit=50`);
       if (res.ok && !cancelled) {
         const data = (await res.json()) as { messages: Message[] };
@@ -86,9 +72,25 @@ export function MessageThread({
           const hours = (Date.now() - new Date(lastInbound.sent_at).getTime()) / (1000 * 60 * 60);
           setWindowClosed(hours >= 24);
         }
+
+        // Auto-sync history from Instagram in the background
+        fetch(`/api/conversations/${conversationId}/sync`, { method: "POST" })
+          .then(async (syncRes) => {
+            if (syncRes.ok && !cancelled) {
+              const syncData = (await syncRes.json()) as { synced: number };
+              if (syncData.synced > 0) {
+                const refreshRes = await fetch(`/api/conversations/${conversationId}/messages?limit=50`);
+                if (refreshRes.ok && !cancelled) {
+                  const refreshData = (await refreshRes.json()) as { messages: Message[] };
+                  setMessages(refreshData.messages);
+                }
+              }
+            }
+          })
+          .catch(() => { /* sync failures are non-critical */ });
       }
     }
-    fetchInitial();
+    fetchAndSync();
     return () => { cancelled = true; };
   }, [conversationId]);
 
@@ -152,17 +154,6 @@ export function MessageThread({
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-3 space-y-2"
       >
-        <div className="flex justify-center pb-2">
-          <button
-            type="button"
-            onClick={syncHistory}
-            disabled={syncing}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing…" : "Load older messages"}
-          </button>
-        </div>
         {messages.map((msg) => (
           <div
             key={msg.id}

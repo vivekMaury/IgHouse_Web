@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/crypto/token";
-import { fetchConversations, fetchConversationMessages } from "@/lib/meta/conversations";
+import { syncConversationHistory } from "@/lib/meta/sync-history";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function POST(
@@ -80,65 +80,17 @@ export async function POST(
   }
 
   try {
-    const igConversations = await fetchConversations(account.platform_account_id, accessToken, 50);
+    const result = await syncConversationHistory({
+      supabase: admin,
+      workspaceId: conversation.workspace_id,
+      conversationId,
+      contactId: conversation.contact_id,
+      contactPlatformScopedId: contact.platform_scoped_id,
+      igBusinessAccountId: account.platform_account_id,
+      accessToken,
+    });
 
-    const targetConv = igConversations.find((c) =>
-      c.participants.some((p) => p.id === contact.platform_scoped_id),
-    );
-
-    if (!targetConv) {
-      return NextResponse.json({ synced: 0, message: "No matching conversation found on Instagram" });
-    }
-
-    const messages = await fetchConversationMessages(targetConv.igConversationId, accessToken, 50);
-
-    const igMessageIds = messages.map((m) => m.igMessageId);
-    const { data: existingRows } = await admin
-      .from("messages")
-      .select("platform_message_id")
-      .eq("conversation_id", conversationId)
-      .in("platform_message_id", igMessageIds);
-
-    const existingIds = new Set(
-      (existingRows ?? []).map((r) => (r as { platform_message_id: string }).platform_message_id),
-    );
-
-    let synced = 0;
-    let contactUsername: string | null = null;
-
-    for (const msg of messages) {
-      if (existingIds.has(msg.igMessageId)) continue;
-
-      const direction = msg.fromId === contact.platform_scoped_id ? "inbound" : "outbound";
-      const source = direction === "inbound" ? "human" : "automation";
-
-      const { error: insertErr } = await admin.from("messages").insert({
-        workspace_id: conversation.workspace_id,
-        conversation_id: conversationId,
-        direction,
-        source,
-        content: msg.text,
-        platform_message_id: msg.igMessageId,
-        sent_at: new Date(msg.createdTime).toISOString(),
-        metadata: {},
-      } as Record<string, unknown>);
-
-      if (!insertErr) synced++;
-
-      if (msg.fromUsername && msg.fromId === contact.platform_scoped_id) {
-        contactUsername = msg.fromUsername;
-      }
-    }
-
-    if (contactUsername) {
-      await admin
-        .from("contacts")
-        .update({ username: contactUsername } as Record<string, unknown>)
-        .eq("id", conversation.contact_id)
-        .is("username", null);
-    }
-
-    return NextResponse.json({ synced, total: messages.length });
+    return NextResponse.json(result);
   } catch (err) {
     console.error("[sync] Message history sync failed:", (err as Error).message);
     return NextResponse.json({ error: "Sync failed" }, { status: 500 });

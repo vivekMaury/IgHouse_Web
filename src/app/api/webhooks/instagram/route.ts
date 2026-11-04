@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { fetchIgUserProfile } from "@/lib/meta/instagram";
 import { decryptToken } from "@/lib/crypto/token";
+import { syncConversationHistory } from "@/lib/meta/sync-history";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -39,7 +40,7 @@ async function handleMessageEvent(
   const igAccountId = String(event.ig_account_id);
   const { data: account, error: accountErr } = await supabase
     .from("connected_accounts")
-    .select("id, workspace_id, encrypted_access_token, token_iv")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
     .eq("platform_account_id", igAccountId)
     .eq("platform", "instagram")
     .eq("is_active", true)
@@ -56,6 +57,19 @@ async function handleMessageEvent(
   }
 
   const { workspace_id, id: connected_account_id } = account;
+
+  // Decrypt access token once for profile enrichment + history sync
+  let accessToken: string | null = null;
+  try {
+    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
+    const ivHex = (account as Record<string, unknown>).token_iv as string;
+    accessToken = decryptToken(
+      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+    );
+  } catch (err) {
+    console.warn("[webhook:sync] Token decryption failed:", (err as Error).message);
+  }
 
   // 2. Upsert the sender as a contact
   const { data: contact, error: contactErr } = await supabase
@@ -75,29 +89,24 @@ async function handleMessageEvent(
     return;
   }
 
-  // 2b. Enrich contact with Instagram profile (non-blocking for message flow)
-  try {
-    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
-    const ivHex = (account as Record<string, unknown>).token_iv as string;
-    const accessToken = decryptToken(
-      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
-      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
-    );
+  // 2b. Enrich contact with Instagram profile
+  if (accessToken) {
+    try {
+      const profile = await fetchIgUserProfile(event.sender_id, accessToken);
+      const updates: Record<string, unknown> = {};
+      if (profile.username) updates.username = profile.username;
+      if (profile.name) updates.full_name = profile.name;
+      if (profile.profile_pic) updates.avatar_url = profile.profile_pic;
 
-    const profile = await fetchIgUserProfile(event.sender_id, accessToken);
-    const updates: Record<string, unknown> = {};
-    if (profile.username) updates.username = profile.username;
-    if (profile.name) updates.full_name = profile.name;
-    if (profile.profile_pic) updates.avatar_url = profile.profile_pic;
-
-    if (Object.keys(updates).length > 0) {
-      await supabase
-        .from("contacts")
-        .update(updates)
-        .eq("id", contact.id);
+      if (Object.keys(updates).length > 0) {
+        await supabase
+          .from("contacts")
+          .update(updates)
+          .eq("id", contact.id);
+      }
+    } catch (err) {
+      console.warn("[webhook:sync] Profile enrichment failed for sender:", event.sender_id, (err as Error).message);
     }
-  } catch (err) {
-    console.warn("[webhook:sync] Profile enrichment failed for sender:", event.sender_id, (err as Error).message);
   }
 
   // 3. Get or create the conversation thread
@@ -158,6 +167,33 @@ async function handleMessageEvent(
   console.log(
     `[webhook:sync] Saved inbound message mid=${event.platform_event_id} contact=${contact.id} conversation=${conversation.id}`,
   );
+
+  // 7. Auto-sync history for new conversations (fire-and-forget)
+  if (accessToken) {
+    const { data: msgCountRows } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", conversation.id);
+
+    const isNewConversation = !msgCountRows || msgCountRows.length <= 1;
+
+    if (isNewConversation) {
+      const platformAccountId = (account as Record<string, unknown>).platform_account_id as string;
+      void syncConversationHistory({
+        supabase,
+        workspaceId: workspace_id,
+        conversationId: conversation.id,
+        contactId: contact.id,
+        contactPlatformScopedId: event.sender_id,
+        igBusinessAccountId: platformAccountId,
+        accessToken,
+      }).then((result) => {
+        console.log(`[webhook:sync] Auto-synced ${result.synced}/${result.total} historical messages for conversation=${conversation.id}`);
+      }).catch((err) => {
+        console.warn("[webhook:sync] Auto history sync failed:", (err as Error).message);
+      });
+    }
+  }
 }
 
 export async function POST(request: Request) {
