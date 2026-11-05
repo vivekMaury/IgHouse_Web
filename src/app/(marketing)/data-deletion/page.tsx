@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Data Deletion",
-  description: "IgHouse data deletion policy — how to request deletion of your data and what happens when you do.",
+  description: "IgInbox data deletion policy — how to request deletion of your data and what happens when you do.",
 };
 
 export default function DataDeletionPage() {
@@ -11,7 +11,7 @@ export default function DataDeletionPage() {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-white/5 px-6">
         <Link href="/" className="text-lg font-bold tracking-tight text-white">
-          Ig<span className="text-[#FF007F]">House</span>
+          Ig<span className="text-[#FF007F]">Inbox</span>
         </Link>
       </header>
 
@@ -24,7 +24,7 @@ export default function DataDeletionPage() {
             <h2 className="text-lg font-semibold text-foreground">1. Your Right to Delete</h2>
             <p className="mt-2">
               You have the right to request deletion of all personal data associated with your
-              IgHouse account at any time. We are committed to honoring every deletion request
+              IgInbox account at any time. We are committed to honoring every deletion request
               promptly and transparently, in compliance with GDPR, CCPA, and Meta Platform Terms.
             </p>
           </section>
@@ -40,13 +40,13 @@ export default function DataDeletionPage() {
               </li>
               <li>
                 <span className="font-medium text-foreground">Via Instagram settings:</span>{" "}
-                Remove IgHouse from your Instagram connected apps. This triggers an automatic data deletion
+                Remove IgInbox from your Instagram connected apps. This triggers an automatic data deletion
                 callback from Meta, and we remove all data associated with that Instagram account.
               </li>
               <li>
                 <span className="font-medium text-foreground">By contacting us:</span>{" "}
                 Email{" "}
-                <span className="font-medium text-foreground">privacy@ighouse.com</span>{" "}
+                <span className="font-medium text-foreground">info@iginbox.com</span>{" "}
                 with the subject line &quot;Data Deletion Request&quot; and the email address associated
                 with your account. We will process your request within 48 hours.
               </li>
@@ -92,8 +92,8 @@ export default function DataDeletionPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">5. Meta Data Deletion Callback</h2>
             <p className="mt-2">
-              In compliance with Meta Platform Terms, IgHouse implements a data deletion callback
-              endpoint. When a user removes the IgHouse app from their Instagram/Facebook settings,
+              In compliance with Meta Platform Terms, IgInbox implements a data deletion callback
+              endpoint. When a user removes the IgInbox app from their Instagram/Facebook settings,
               Meta sends a signed request to our server. We verify the request using HMAC-SHA256
               and immediately delete all data associated with that user&apos;s Instagram account.
             </p>
@@ -138,14 +138,14 @@ export default function DataDeletionPage() {
             <h2 className="text-lg font-semibold text-foreground">8. Contact</h2>
             <p className="mt-2">
               For questions about data deletion or to submit a request, contact us at{" "}
-              <span className="font-medium text-foreground">privacy@ighouse.com</span>.
+              <span className="font-medium text-foreground">info@iginbox.com</span>.
             </p>
           </section>
         </div>
       </main>
 
       <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        &copy; 2026 IgHouse. All rights reserved.
+        &copy; 2026 IgInbox. All rights reserved.
       </footer>
     </div>
   );

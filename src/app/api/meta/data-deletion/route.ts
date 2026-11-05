@@ -21,7 +21,7 @@ function parseSignedRequest(signedRequest: string, appSecret: string): Record<st
 
 export async function GET() {
   return NextResponse.json({
-    service: "IgHouse",
+    service: "IgInbox",
     endpoint: "Meta Data Deletion Callback",
     method: "POST",
     description: "This endpoint receives data deletion requests from Meta. It is not meant to be accessed directly.",

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://ig-house-web.vercel.app";
+  const baseUrl = "https://iginbox.com";
 
   return [
     { url: baseUrl, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },

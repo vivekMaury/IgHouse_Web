@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Documentation",
-  description: "IgHouse documentation — learn how to set up automations, connect Instagram, and grow your audience.",
+  description: "IgInbox documentation — learn how to set up automations, connect Instagram, and grow your audience.",
 };
 
 export default function DocsPage() {
@@ -11,14 +11,14 @@ export default function DocsPage() {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-white/5 px-6">
         <Link href="/" className="text-lg font-bold tracking-tight text-white">
-          Ig<span className="text-[#FF007F]">House</span>
+          Ig<span className="text-[#FF007F]">Inbox</span>
         </Link>
       </header>
 
       <main className="mx-auto max-w-3xl flex-1 px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight">Documentation</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Everything you need to get started with IgHouse and make the most of your Instagram automation.
+          Everything you need to get started with IgInbox and make the most of your Instagram automation.
         </p>
 
         <div className="mt-10 space-y-10">
@@ -33,7 +33,7 @@ export default function DocsPage() {
                 <h3 className="font-semibold text-foreground">Create Your Account</h3>
                 <p className="mt-1.5">
                   Sign up for free at{" "}
-                  <Link href="/signup" className="font-medium text-[#FF007F] hover:underline">ighouse.com/signup</Link>.
+                  <Link href="/signup" className="font-medium text-[#FF007F] hover:underline">iginbox.com/signup</Link>.
                   No credit card required. You can use your email and password or sign in with Google.
                 </p>
               </div>
@@ -42,7 +42,7 @@ export default function DocsPage() {
                 <p className="mt-1.5">
                   Navigate to <span className="font-medium text-foreground">Settings → Instagram</span> and
                   click <span className="font-medium text-foreground">Connect Instagram</span>. You&apos;ll be
-                  redirected to Meta&apos;s OAuth flow where you&apos;ll grant IgHouse permission to manage
+                  redirected to Meta&apos;s OAuth flow where you&apos;ll grant IgInbox permission to manage
                   your messages and read comments.
                 </p>
                 <div className="mt-3 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-200/80">
@@ -141,7 +141,7 @@ export default function DocsPage() {
               </div>
               <div className="rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-xs text-blue-200/80">
                 <span className="font-semibold">Note:</span> Instagram&apos;s API enforces a 24-hour messaging window.
-                You can only send messages to a user within 24 hours of their last message to you. IgHouse
+                You can only send messages to a user within 24 hours of their last message to you. IgInbox
                 automatically tracks this and prevents sends outside the window.
               </div>
             </div>
@@ -205,7 +205,7 @@ export default function DocsPage() {
               <div className="rounded-lg border border-border/60 p-4">
                 <h3 className="font-semibold text-foreground">Meta Compliance</h3>
                 <p className="mt-1.5">
-                  IgHouse enforces Meta&apos;s platform policies automatically:
+                  IgInbox enforces Meta&apos;s platform policies automatically:
                 </p>
                 <ul className="mt-2 list-disc space-y-1.5 pl-5">
                   <li>Maximum 1 private reply per comment (prevents spam)</li>
@@ -231,15 +231,15 @@ export default function DocsPage() {
                   a: "Yes. Instagram's Messaging and Comment APIs only work with Business or Creator accounts that are connected to a Facebook Page. Personal accounts are not supported.",
                 },
                 {
-                  q: "Will I get banned for using IgHouse?",
-                  a: "No. IgHouse uses Meta's official APIs and has passed App Review. We enforce all rate limits, messaging windows, and anti-spam policies. Your account is safe.",
+                  q: "Will I get banned for using IgInbox?",
+                  a: "No. IgInbox uses Meta's official APIs and has passed App Review. We enforce all rate limits, messaging windows, and anti-spam policies. Your account is safe.",
                 },
                 {
                   q: "How fast are automated replies?",
                   a: "Most replies are delivered within 2-5 seconds. We use Inngest's durable job queue to ensure reliable, fast delivery even under high load.",
                 },
                 {
-                  q: "Can I use IgHouse on multiple Instagram accounts?",
+                  q: "Can I use IgInbox on multiple Instagram accounts?",
                   a: "The Free plan supports 1 Instagram account. Pro supports up to 5 accounts, all managed from a single dashboard.",
                 },
                 {
@@ -268,7 +268,7 @@ export default function DocsPage() {
               <ul className="mt-3 list-disc space-y-1.5 pl-5">
                 <li>
                   <span className="font-medium text-foreground">Email:</span>{" "}
-                  <span className="font-medium text-foreground">support@ighouse.com</span>
+                  <span className="font-medium text-foreground">info@iginbox.com</span>
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Response time:</span>{" "}
@@ -281,7 +281,7 @@ export default function DocsPage() {
       </main>
 
       <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        &copy; 2026 IgHouse. All rights reserved.
+        &copy; 2026 IgInbox. All rights reserved.
       </footer>
     </div>
   );

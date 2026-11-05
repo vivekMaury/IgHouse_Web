@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "IgHouse privacy policy — how we collect, use, and protect your data.",
+  description: "IgInbox privacy policy — how we collect, use, and protect your data.",
 };
 
 export default function PrivacyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-white/5 px-6">
         <Link href="/" className="text-lg font-bold tracking-tight text-white">
-          Ig<span className="text-[#FF007F]">House</span>
+          Ig<span className="text-[#FF007F]">Inbox</span>
         </Link>
       </header>
 
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">2. How We Use Your Information</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>To provide and operate the IgHouse automation service</li>
+              <li>To provide and operate the IgInbox automation service</li>
               <li>To send and receive Instagram DMs and comment replies on your behalf</li>
               <li>To manage your contacts and conversation history within the platform</li>
               <li>To send transactional emails related to your account</li>
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground">6. Third-Party Services</h2>
-            <p className="mt-2">We use the following third-party services to operate IgHouse:</p>
+            <p className="mt-2">We use the following third-party services to operate IgInbox:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>Meta (Instagram) API — for DM and comment automation</li>
               <li>Supabase — database and authentication</li>
@@ -119,14 +119,14 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-foreground">10. Contact</h2>
             <p className="mt-2">
               If you have questions about this privacy policy or your data, contact us at{" "}
-              <span className="font-medium text-foreground">privacy@ighouse.com</span>.
+              <span className="font-medium text-foreground">info@iginbox.com</span>.
             </p>
           </section>
         </div>
       </main>
 
       <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        &copy; 2026 IgHouse. All rights reserved.
+        &copy; 2026 IgInbox. All rights reserved.
       </footer>
     </div>
   );

@@ -1,4 +1,4 @@
-IgHouse — Product Requirements Document v3.0 (Fresh Start)
+IgInbox — Product Requirements Document v3.0 (Fresh Start)
 Version 3.0 · Rebuild from scratch · Builder: you + Claude Code in VS Code · Updated October 19, 2026
 1. What Changed From v2.0
 Your v2.0 document describes a finished build with every milestone marked complete. For a fresh start you need a build plan instead, so v3.0 is organized around what to build first, what to defer, and how to work with Claude step by step.
@@ -14,7 +14,7 @@ Fixed from v2.0
 •	No place to store where a contact is inside a flow. v3.0 adds flow_runs so Wait-for-Reply, delays and human takeover work correctly.
 •	Vercel Cron frequency depends on your plan, so a cron-only worker can be too slow. v3.0 uses a managed queue/job runner for execution.
 2. Vision and Goals
-Vision: IgHouse turns Instagram comments, story mentions and DMs into automated, compliant sales funnels, with a visual builder and a shared inbox where humans can step in at any time.
+Vision: IgInbox turns Instagram comments, story mentions and DMs into automated, compliant sales funnels, with a visual builder and a shared inbox where humans can step in at any time.
 Goals
 1.	Reply to an Instagram trigger in under 5 seconds end to end (webhook ACK under 200 ms).
 2.	A non-technical user builds and publishes a working comment-to-DM flow in under 10 minutes.
@@ -201,7 +201,7 @@ SEO applies to the public marketing site. The dashboard must stay private.
 •	Internationalization with hreflang if you add Hindi or other languages (strong opportunity for India).
 8.2 Content SEO
 •	Target keyword clusters: Instagram comment to DM automation, Instagram DM automation tool, ManyChat alternative, auto reply to Instagram comments, Instagram lead generation, Instagram chatbot for business.
-•	Programmatic pages: /use-cases/{industry} (coaches, real estate, fitness, e-commerce, agencies) and /compare/ighouse-vs-{competitor} written with real differentiators, not thin templates.
+•	Programmatic pages: /use-cases/{industry} (coaches, real estate, fitness, e-commerce, agencies) and /compare/iginbox-vs-{competitor} written with real differentiators, not thin templates.
 •	Blog with how-tos, templates and Meta policy explainers; each post links to a template or signup.
 •	Free tools as link bait: Instagram caption generator, comment-to-DM message template library, keyword trigger tester.
 •	Social proof pages: case studies, reviews, changelog and public roadmap.
@@ -230,8 +230,8 @@ Business KPIs	Signup to connected account above 40%; connected to first publishe
 •	Install the Claude Code extension for VS Code (or run Claude Code in the integrated terminal).
 •	Install the Supabase CLI and Docker for a local database.
 11.2 Project Setup
-npx create-next-app@latest ighouse --typescript --tailwind --eslint --app --src-dir
-cd ighouse
+npx create-next-app@latest iginbox --typescript --tailwind --eslint --app --src-dir
+cd iginbox
 git init && git add . && git commit -m "chore: bootstrap"
 npx shadcn@latest init
 npm i @supabase/supabase-js @supabase/ssr @xyflow/react zod @tanstack/react-query zustand lucide-react
@@ -268,7 +268,7 @@ docs/
 CLAUDE.md
 11.4 CLAUDE.md Template
 Create CLAUDE.md in the repo root. Claude Code reads it at the start of every session.
-# IgHouse — instructions for Claude
+# IgInbox — instructions for Claude
 
 ## Product
 Instagram automation SaaS. Read docs/PRD.md before big tasks.

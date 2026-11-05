@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "IgHouse turns Instagram comments into customers";
+export const alt = "IgInbox turns Instagram comments into customers";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -36,7 +36,7 @@ export default function OpenGraphImage() {
           >
             I
           </div>
-          <span style={{ fontSize: "26px", fontWeight: 650, letterSpacing: "-1px" }}>IgHouse</span>
+          <span style={{ fontSize: "26px", fontWeight: 650, letterSpacing: "-1px" }}>IgInbox</span>
         </div>
         <div style={{ maxWidth: "930px", fontSize: "64px", lineHeight: 1.08, fontWeight: 700, letterSpacing: "-3px" }}>
           Turn Instagram comments into customers on autopilot

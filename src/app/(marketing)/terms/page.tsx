@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "IgHouse terms of service — rules and guidelines for using the platform.",
+  description: "IgInbox terms of service — rules and guidelines for using the platform.",
 };
 
 export default function TermsPage() {
@@ -11,7 +11,7 @@ export default function TermsPage() {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-white/5 px-6">
         <Link href="/" className="text-lg font-bold tracking-tight text-white">
-          Ig<span className="text-[#FF007F]">House</span>
+          Ig<span className="text-[#FF007F]">Inbox</span>
         </Link>
       </header>
 
@@ -23,7 +23,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">1. Acceptance of Terms</h2>
             <p className="mt-2">
-              By creating an account or using IgHouse, you agree to these Terms of Service. If you
+              By creating an account or using IgInbox, you agree to these Terms of Service. If you
               do not agree, do not use the service.
             </p>
           </section>
@@ -31,7 +31,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">2. Description of Service</h2>
             <p className="mt-2">
-              IgHouse is an Instagram DM and comment automation platform. It allows you to build
+              IgInbox is an Instagram DM and comment automation platform. It allows you to build
               visual flows that automatically respond to Instagram comments, send direct messages,
               and manage conversations through a shared inbox.
             </p>
@@ -40,7 +40,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">3. Account Requirements</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>You must be at least 18 years old to use IgHouse</li>
+              <li>You must be at least 18 years old to use IgInbox</li>
               <li>You must provide a valid email address</li>
               <li>You are responsible for maintaining the security of your account</li>
               <li>You must have an Instagram Business or Creator account to connect</li>
@@ -50,7 +50,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground">4. Acceptable Use</h2>
-            <p className="mt-2">You agree NOT to use IgHouse to:</p>
+            <p className="mt-2">You agree NOT to use IgInbox to:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>Send spam, unsolicited messages, or bulk promotional content</li>
               <li>Violate Meta&apos;s Platform Terms, Community Guidelines, or Developer Policies</li>
@@ -65,10 +65,10 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">5. Meta Platform Compliance</h2>
             <p className="mt-2">
-              IgHouse operates through Meta&apos;s official APIs and adheres to Meta&apos;s Platform
-              Terms. You acknowledge that your use of IgHouse is also subject to Meta&apos;s terms
+              IgInbox operates through Meta&apos;s official APIs and adheres to Meta&apos;s Platform
+              Terms. You acknowledge that your use of IgInbox is also subject to Meta&apos;s terms
               and policies. Violation of Meta&apos;s policies may result in suspension of your
-              IgHouse account and disconnection of your Instagram integration.
+              IgInbox account and disconnection of your Instagram integration.
             </p>
           </section>
 
@@ -78,14 +78,14 @@ export default function TermsPage() {
               <li>Automated messages are subject to Instagram&apos;s 24-hour messaging window</li>
               <li>Only one private reply is sent per comment to prevent spam</li>
               <li>Users who opt out will not receive further automated messages</li>
-              <li>IgHouse enforces cooldown periods between automated messages</li>
+              <li>IgInbox enforces cooldown periods between automated messages</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-foreground">7. Service Availability</h2>
             <p className="mt-2">
-              We strive to keep IgHouse available 24/7, but we do not guarantee uninterrupted
+              We strive to keep IgInbox available 24/7, but we do not guarantee uninterrupted
               service. We may perform maintenance, updates, or experience downtime. Changes to
               Meta&apos;s API may also affect service availability.
             </p>
@@ -94,7 +94,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">8. Intellectual Property</h2>
             <p className="mt-2">
-              The IgHouse platform, including its design, code, and branding, is our intellectual
+              The IgInbox platform, including its design, code, and branding, is our intellectual
               property. The automation flows and content you create remain yours. You grant us a
               limited license to process your content as necessary to provide the service.
             </p>
@@ -103,7 +103,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-foreground">9. Limitation of Liability</h2>
             <p className="mt-2">
-              IgHouse is provided &quot;as is&quot; without warranty. We are not liable for any
+              IgInbox is provided &quot;as is&quot; without warranty. We are not liable for any
               indirect, incidental, or consequential damages arising from your use of the service,
               including any actions taken by Meta or Instagram against your account due to
               automated messaging.
@@ -131,14 +131,14 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold text-foreground">12. Contact</h2>
             <p className="mt-2">
               For questions about these terms, contact us at{" "}
-              <span className="font-medium text-foreground">legal@ighouse.com</span>.
+              <span className="font-medium text-foreground">info@iginbox.com</span>.
             </p>
           </section>
         </div>
       </main>
 
       <footer className="border-t border-border/60 py-6 text-center text-sm text-muted-foreground">
-        &copy; 2026 IgHouse. All rights reserved.
+        &copy; 2026 IgInbox. All rights reserved.
       </footer>
     </div>
   );

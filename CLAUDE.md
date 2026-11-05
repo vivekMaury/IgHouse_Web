@@ -1,4 +1,4 @@
-# IgHouse — Instructions for Claude Code
+# IgInbox — Instructions for Claude Code
 
 ## Product
 Instagram DM & Comment Automation SaaS. Always read `docs/PRD.md` before planning any feature.

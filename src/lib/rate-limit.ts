@@ -19,7 +19,7 @@ function createLimiter(tokens: number, window: string) {
     redis: r,
     limiter: Ratelimit.slidingWindow(tokens, window as Parameters<typeof Ratelimit.slidingWindow>[1]),
     analytics: true,
-    prefix: "ighouse:rl",
+    prefix: "iginbox:rl",
   });
 }
 

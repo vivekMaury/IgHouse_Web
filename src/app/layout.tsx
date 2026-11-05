@@ -22,25 +22,25 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://ig-house-web.vercel.app"),
+  metadataBase: new URL("https://iginbox.com"),
   title: {
-    default: "IgHouse — Instagram DM & Comment Automation",
-    template: "%s | IgHouse",
+    default: "IgInbox — Instagram DM & Comment Automation",
+    template: "%s | IgInbox",
   },
   description:
     "Turn Instagram comments into automated sales funnels with visual flows, DM automation, and a shared inbox.",
   openGraph: {
-    title: "IgHouse — Instagram DM & Comment Automation",
+    title: "IgInbox — Instagram DM & Comment Automation",
     description:
       "Build visual flows that reply to comments, send DMs, capture leads, and qualify prospects — all on autopilot.",
-    url: "https://ig-house-web.vercel.app",
-    siteName: "IgHouse",
+    url: "https://iginbox.com",
+    siteName: "IgInbox",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "IgHouse — Instagram DM & Comment Automation",
+    title: "IgInbox — Instagram DM & Comment Automation",
     description:
       "Build visual flows that reply to comments, send DMs, capture leads, and qualify prospects — all on autopilot.",
   },

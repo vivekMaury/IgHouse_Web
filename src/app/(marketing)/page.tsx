@@ -21,7 +21,7 @@ import {
 import { InstagramIcon as Instagram } from "@/components/icons";
 import UseCaseTabs from "./use-case-tabs";
 
-const siteUrl = "https://ig-house-web.vercel.app";
+const siteUrl = "https://iginbox.com";
 const description =
   "Turn Instagram comments into conversations and customers. Build visual automations for comment replies, DMs, lead capture, and your shared inbox.";
 
@@ -30,22 +30,22 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Turn Instagram comments into customers | IgHouse",
+    title: "Turn Instagram comments into customers | IgInbox",
     description,
     url: siteUrl,
-    siteName: "IgHouse",
+    siteName: "IgInbox",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Turn Instagram comments into customers | IgHouse",
+    title: "Turn Instagram comments into customers | IgInbox",
     description,
   },
 };
 
 const faqs = [
   {
-    question: "What can I automate with IgHouse?",
+    question: "What can I automate with IgInbox?",
     answer:
       "Create visual workflows that respond to Instagram comments, send follow-up DMs, capture leads, and route conversations to your team.",
   },
@@ -62,12 +62,12 @@ const faqs = [
   {
     question: "Can I control when automated messages are sent?",
     answer:
-      "IgHouse is designed around Instagram's messaging rules, including messaging windows and comment-reply limits. Your workflows should always follow current Meta policies.",
+      "IgInbox is designed around Instagram's messaging rules, including messaging windows and comment-reply limits. Your workflows should always follow current Meta policies.",
   },
   {
     question: "How is account data handled?",
     answer:
-      "IgHouse is built with workspace isolation and protected account credentials in mind. Read the Privacy page for details, or use the Data Deletion page to request deletion.",
+      "IgInbox is built with workspace isolation and protected account credentials in mind. Read the Privacy page for details, or use the Data Deletion page to request deletion.",
   },
 ];
 
@@ -75,13 +75,13 @@ const structuredData = [
   {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "IgHouse",
+    name: "IgInbox",
     url: siteUrl,
   },
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "IgHouse",
+    name: "IgInbox",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     description,
@@ -121,10 +121,10 @@ function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 pt-3 sm:px-6">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between rounded-2xl border border-white/[0.09] bg-[#101014]/80 px-4 shadow-[0_8px_40px_rgba(0,0,0,.2)] backdrop-blur-xl sm:px-5">
-        <Link href="/" aria-label="IgHouse home" className="flex items-center gap-2.5">
+        <Link href="/" aria-label="IgInbox home" className="flex items-center gap-2.5">
           <BrandMark small />
           <span className="text-[15px] font-semibold tracking-tight text-white">
-            Ig<span className="text-pink-400">House</span>
+            Ig<span className="text-pink-400">Inbox</span>
           </span>
         </Link>
         <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
@@ -334,7 +334,7 @@ function Hero() {
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-zinc-400 sm:text-lg sm:leading-8">
-            Turn every comment into a timely, personal conversation. Build a flow once, then let IgHouse reply, share what people want, and keep your inbox moving.
+            Turn every comment into a timely, personal conversation. Build a flow once, then let IgInbox reply, share what people want, and keep your inbox moving.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
@@ -500,7 +500,7 @@ function FlowDemo() {
             One comment. A thoughtful next step.
           </h2>
           <p className="mt-4 text-sm leading-7 text-zinc-400 sm:text-base">
-            A post gets a comment with your keyword. IgHouse sends the reply you prepared, while keeping the conversation visible to your team.
+            A post gets a comment with your keyword. IgInbox sends the reply you prepared, while keeping the conversation visible to your team.
           </p>
           <ul className="mt-7 space-y-3">
             {["Choose your trigger words", "Personalize the first DM", "Keep a human in the loop"].map((item) => (
@@ -724,7 +724,7 @@ function FinalCTA() {
           <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-[-.035em] text-white sm:text-5xl">Your next great customer could be in the comments.</h2>
           <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-zinc-400 sm:text-base">Give every comment a useful next step, and every conversation the chance to grow.</p>
           <Link href="/signup" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-semibold text-zinc-950 transition hover:bg-pink-100">
-            Get started with IgHouse <ArrowRight className="size-4" />
+            Get started with IgInbox <ArrowRight className="size-4" />
           </Link>
         </div>
       </div>
@@ -740,7 +740,7 @@ function Footer() {
           <div>
             <Link href="/" className="flex items-center gap-2.5">
               <BrandMark small />
-              <span className="text-sm font-semibold text-white">Ig<span className="text-pink-400">House</span></span>
+              <span className="text-sm font-semibold text-white">Ig<span className="text-pink-400">Inbox</span></span>
             </Link>
             <p className="mt-3 max-w-xs text-xs leading-5 text-zinc-600">A clearer way to turn Instagram conversations into meaningful connections.</p>
           </div>
@@ -752,7 +752,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-8 flex flex-col gap-2 border-t border-white/[0.05] pt-5 text-[10px] text-zinc-700 sm:flex-row sm:justify-between">
-          <span>© IgHouse. All rights reserved.</span>
+          <span>© IgInbox. All rights reserved.</span>
           <span>Built for better conversations.</span>
         </div>
       </div>
