@@ -216,59 +216,33 @@ async function runAutomationFlows(
     return;
   }
 
-  const triggerTypeFilter =
-    matchableEvent.eventType === "story_reply"
-      ? "story_reply"
-      : matchableEvent.eventType === "mention"
-        ? "story_mention"
-        : null;
-  const flowQueryFilters = {
-    workspaceId: ctx.workspaceId,
-    status: "published",
-    triggerType: triggerTypeFilter,
-    flowVersionPublishedAt: "not null",
-  };
-  console.log("[webhook:flow] Fetching published flows", flowQueryFilters);
+  // 2. Fetch all published flows — trigger-type filtering happens in matchFlows(),
+  // NOT in the DB query. The flows.trigger_type column is nullable (not always populated)
+  // and PostgREST .not() on embedded tables silently returns zero rows.
+  console.log(`[webhook:flow] Fetching published flows workspace=${ctx.workspaceId} eventType=${matchableEvent.eventType}`);
 
-  // 2. Match triggers against published flows
-  const publishedFlowsQuery = supabase
+  const { data: flows, error: flowQueryError } = await supabase
     .from("flows")
-    .select("id, trigger_type, status, flow_versions!inner(id, definition, version, published_at)")
+    .select("id, flow_versions!inner(id, definition)")
     .eq("workspace_id", ctx.workspaceId)
     .eq("status", "published")
-    .not("flow_versions.published_at", "is", null);
-  const { data: flows, error: flowQueryError } = triggerTypeFilter
-    ? await publishedFlowsQuery
-        .eq("trigger_type", triggerTypeFilter)
-        .order("version", { referencedTable: "flow_versions", ascending: false })
-    : await publishedFlowsQuery.order("version", { referencedTable: "flow_versions", ascending: false });
+    .order("version", { referencedTable: "flow_versions", ascending: false });
 
   if (flowQueryError) {
     console.error("[webhook:flow] Failed to fetch published flows", {
-      ...flowQueryFilters,
+      workspaceId: ctx.workspaceId,
       error: flowQueryError.message,
+      code: flowQueryError.code,
     });
-    throw flowQueryError;
-  }
-
-  console.log("[webhook:flow] Published flow query results", {
-    count: flows?.length ?? 0,
-    flows: (flows ?? []).map((flow) => ({
-      id: flow.id,
-      triggerType: flow.trigger_type,
-      status: flow.status,
-      versions: flow.flow_versions.map((version) => ({
-        id: version.id,
-        version: version.version,
-        publishedAt: version.published_at,
-      })),
-    })),
-  });
-
-  if (!flows?.length) {
-    console.log("[webhook:flow] No published flows for workspace:", ctx.workspaceId);
     return;
   }
+
+  if (!flows?.length) {
+    console.warn(`[webhook:flow] No published flows for workspace=${ctx.workspaceId} — check that at least one flow has status='published'`);
+    return;
+  }
+
+  console.log(`[webhook:flow] Found ${flows.length} published flow(s) for workspace=${ctx.workspaceId}`);
 
   const matchableFlows = (flows as Array<{ id: string; flow_versions: Array<{ id: string; definition: unknown }> }>)
     .filter((f) => f.flow_versions.length > 0)
