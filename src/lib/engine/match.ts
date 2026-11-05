@@ -70,35 +70,67 @@ export function matchFlows(
 ): MatchResult[] {
   const results: MatchResult[] = [];
 
+  console.log("[engine:match] Matching event against flows", {
+    eventType: event.eventType,
+    hasText: event.text !== undefined,
+    flowCount: flows.length,
+    flowIds: flows.map((flow) => flow.id),
+  });
+
   for (const flow of flows) {
     const trigger = getTriggerNode(flow.definition);
-    if (!trigger) continue;
+    if (!trigger) {
+      console.log("[engine:match] Skipping flow without trigger node", {
+        flowId: flow.id,
+      });
+      continue;
+    }
 
-    if (!eventTypeMatchesTrigger(event.eventType, trigger.data.triggerType)) {
+    const matchesEventType = eventTypeMatchesTrigger(
+      event.eventType,
+      trigger.data.triggerType,
+    );
+    const keywords = trigger.data.keywords?.filter((keyword) => keyword.trim().length > 0) ?? [];
+    const matchesKeywords = keywordsMatch(event.text, keywords, trigger.data.matchAll);
+    const matchesPost = !(
+      trigger.data.triggerType === "comment_keyword" &&
+      trigger.data.postIds?.length &&
+      event.mediaId &&
+      !trigger.data.postIds.includes(event.mediaId)
+    );
+
+    console.log("[engine:match] Evaluated flow", {
+      flowId: flow.id,
+      triggerType: trigger.data.triggerType,
+      eventType: event.eventType,
+      matchesEventType,
+      keywords,
+      matchAll: trigger.data.matchAll ?? false,
+      matchesKeywords,
+      postIds: trigger.data.postIds ?? [],
+      eventMediaId: event.mediaId,
+      matchesPost,
+    });
+
+    if (!matchesEventType) {
       continue;
     }
 
     // Keyword filtering: only applied when keywords are explicitly configured.
     // Empty/undefined keywords = catch-all (matches any text).
-    const keywords = trigger.data.keywords?.filter((k) => k.length > 0);
-    if (keywords && keywords.length > 0) {
-      if (!keywordsMatch(event.text, keywords, trigger.data.matchAll)) {
-        continue;
-      }
+    if (keywords.length > 0 && !matchesKeywords) {
+      continue;
     }
 
-    if (
-      trigger.data.triggerType === "comment_keyword" &&
-      trigger.data.postIds?.length &&
-      event.mediaId
-    ) {
-      if (!trigger.data.postIds.includes(event.mediaId)) {
-        continue;
-      }
-    }
+    if (!matchesPost) continue;
 
     results.push({ flowId: flow.id, triggerNodeId: trigger.id });
   }
+
+  console.log("[engine:match] Match results", {
+    eventType: event.eventType,
+    matchedFlowIds: results.map((result) => result.flowId),
+  });
 
   return results;
 }

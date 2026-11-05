@@ -265,6 +265,12 @@ describe("matchFlows", () => {
     expect(matchFlows({ eventType: "story_reply" }, flows)).toHaveLength(1);
   });
 
+  it("story_reply with whitespace-only keywords acts as catch-all", () => {
+    const flows = [makeFlow("f1", "story_reply", ["  ", "\t"])];
+    expect(matchFlows({ eventType: "story_reply", text: "Wow" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "story_reply" }, flows)).toHaveLength(1);
+  });
+
   it("story_mention never leaks into dm_keyword or story_reply", () => {
     const flows = [
       makeFlow("dm-flow", "dm_keyword", ["hi"]),
