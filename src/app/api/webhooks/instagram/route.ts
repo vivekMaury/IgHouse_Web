@@ -41,7 +41,11 @@ type FlowContext = {
   commentId?: string;
 };
 
-function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent {
+const VALID_EVENT_TYPES = new Set<string>(["message", "comment", "postback", "mention"]);
+
+function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent | null {
+  if (!VALID_EVENT_TYPES.has(eventType)) return null;
+
   const message = payload.message as Record<string, unknown> | undefined;
   const isComment = eventType === "comment";
   return {
@@ -111,8 +115,6 @@ async function runAutomationFlows(
   } | undefined;
 
   if (waitingRun) {
-    console.log(`[webhook:flow] Resuming waiting flow run=${waitingRun.id} flow=${waitingRun.flow_id}`);
-
     const { data: versionData } = await supabase
       .from("flow_versions")
       .select("definition")
@@ -121,51 +123,68 @@ async function runAutomationFlows(
 
     if (versionData) {
       const flowDef = (versionData as { definition: unknown }).definition as FlowDefinition;
-      const contactTags = await getContactTags(supabase, ctx.contactId);
 
-      const runState: FlowRunState = {
-        id: waitingRun.id,
-        flowId: waitingRun.flow_id,
-        contactId: ctx.contactId,
-        currentNodeId: waitingRun.current_node_id,
-        status: "running",
-        context: {
-          variables: (waitingRun.context.variables as Record<string, string>) ?? {},
-          capturedFields: (waitingRun.context.capturedFields as Record<string, string>) ?? {},
-          privateReplySent: (waitingRun.context.privateReplySent as Record<string, boolean>) ?? {},
-          tags: (waitingRun.context.tags as string[]) ?? [],
-        },
-      };
+      // Only resume if the incoming event type is compatible with the flow's trigger
+      const triggerNode = flowDef.nodes.find((n) => n.data.type === "trigger");
+      const triggerType = triggerNode?.data.type === "trigger" ? triggerNode.data.triggerType : null;
+      const resumeAllowed =
+        (ctx.eventType === "message" && (triggerType === "dm_keyword" || triggerType === "story_reply")) ||
+        (ctx.eventType === "comment" && (triggerType === "comment_keyword" || triggerType === "live_comment")) ||
+        (ctx.eventType === "postback" && triggerType === "ice_breaker") ||
+        (ctx.eventType === "mention" && triggerType === "story_mention");
 
-      const incomingEvent = buildIncomingEvent(ctx.eventType, ctx.payload, {
-        email: ctx.contactEmail ?? undefined,
-        phone: ctx.contactPhone ?? undefined,
-        tags: contactTags,
-      });
+      if (resumeAllowed) {
+        console.log(`[webhook:flow] Resuming waiting flow run=${waitingRun.id} flow=${waitingRun.flow_id}`);
+        const contactTags = await getContactTags(supabase, ctx.contactId);
 
-      const result = engineStep(runState, incomingEvent, flowDef);
+        const runState: FlowRunState = {
+          id: waitingRun.id,
+          flowId: waitingRun.flow_id,
+          contactId: ctx.contactId,
+          currentNodeId: waitingRun.current_node_id,
+          status: "running",
+          context: {
+            variables: (waitingRun.context.variables as Record<string, string>) ?? {},
+            capturedFields: (waitingRun.context.capturedFields as Record<string, string>) ?? {},
+            privateReplySent: (waitingRun.context.privateReplySent as Record<string, boolean>) ?? {},
+            tags: (waitingRun.context.tags as string[]) ?? [],
+          },
+        };
 
-      const sendCtx: SendContext = { accessToken: ctx.accessToken, recipientId: ctx.senderId };
-      const metaResponses = await executeFlowActions(result.actions, sendCtx, supabase, ctx);
+        const incomingEvent = buildIncomingEvent(ctx.eventType, ctx.payload, {
+          email: ctx.contactEmail ?? undefined,
+          phone: ctx.contactPhone ?? undefined,
+          tags: contactTags,
+        });
 
-      await writeAutomationLogs(supabase, result.actions, ctx.workspaceId, waitingRun.flow_id, waitingRun.id, metaResponses);
-      await recordOutboundMessages(supabase, result.actions, metaResponses, ctx);
+        const result = engineStep(runState, incomingEvent, flowDef);
 
-      await supabase
-        .from("flow_runs")
-        .update({
-          current_node_id: result.nextState.currentNodeId,
-          status: result.nextState.status,
-          context: result.nextState.context,
-          completed_at: result.nextState.status === "completed" || result.nextState.status === "failed"
-            ? new Date().toISOString()
-            : null,
-        } as Record<string, unknown>)
-        .eq("id", waitingRun.id);
+        const sendCtx: SendContext = { accessToken: ctx.accessToken, recipientId: ctx.senderId };
+        const metaResponses = await executeFlowActions(result.actions, sendCtx, supabase, ctx);
 
-      console.log(`[webhook:flow] Resumed flow run=${waitingRun.id} newStatus=${result.nextState.status} actions=${result.actions.length}`);
+        await writeAutomationLogs(supabase, result.actions, ctx.workspaceId, waitingRun.flow_id, waitingRun.id, metaResponses);
+        await recordOutboundMessages(supabase, result.actions, metaResponses, ctx);
+
+        await supabase
+          .from("flow_runs")
+          .update({
+            current_node_id: result.nextState.currentNodeId,
+            status: result.nextState.status,
+            context: result.nextState.context,
+            completed_at: result.nextState.status === "completed" || result.nextState.status === "failed"
+              ? new Date().toISOString()
+              : null,
+          } as Record<string, unknown>)
+          .eq("id", waitingRun.id);
+
+        console.log(`[webhook:flow] Resumed flow run=${waitingRun.id} newStatus=${result.nextState.status} actions=${result.actions.length}`);
+        return;
+      }
+
+      console.log(
+        `[webhook:flow] Waiting run=${waitingRun.id} trigger=${triggerType} incompatible with event=${ctx.eventType}, falling through to matcher`,
+      );
     }
-    return;
   }
 
   // 2. Match triggers against published flows
@@ -182,6 +201,10 @@ async function runAutomationFlows(
   }
 
   const matchableEvent = buildMatchableEvent(ctx.eventType, ctx.payload);
+  if (!matchableEvent) {
+    console.log(`[webhook:flow] Unknown event type "${ctx.eventType}", skipping flow matching`);
+    return;
+  }
 
   const matchableFlows = (flows as Array<{ id: string; flow_versions: Array<{ id: string; definition: unknown }> }>)
     .filter((f) => f.flow_versions.length > 0)
