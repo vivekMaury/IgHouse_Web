@@ -336,6 +336,26 @@ end;
 $$;
 
 --------------------------------------------------------------------------------
+-- Dead Letter Queue: stores failed webhook events after max retries
+--------------------------------------------------------------------------------
+create table public.dead_letter_events (
+  id              uuid primary key default gen_random_uuid(),
+  workspace_id    uuid references public.workspaces(id) on delete cascade,
+  event_type      text not null,
+  platform_event_id text,
+  payload         jsonb not null default '{}',
+  error_message   text not null,
+  error_context   jsonb not null default '{}',
+  retry_count     int not null default 0,
+  status          text not null default 'failed' check (status in ('failed', 'replayed', 'dismissed')),
+  created_at      timestamptz not null default now(),
+  replayed_at     timestamptz
+);
+
+create index idx_dle_workspace on public.dead_letter_events(workspace_id);
+create index idx_dle_status on public.dead_letter_events(status, created_at desc);
+
+--------------------------------------------------------------------------------
 -- Supabase Realtime: publish messages & conversations for live UI updates
 --------------------------------------------------------------------------------
 alter publication supabase_realtime add table public.messages;

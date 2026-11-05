@@ -9,6 +9,7 @@ import { syncConversationHistory } from "@/lib/meta/sync-history";
 import { matchFlows, type MatchableEvent, type MatchResult } from "@/lib/engine/match";
 import { step as engineStep, type FlowRunState, type IncomingEvent, type Action } from "@/lib/engine/step";
 import { executeAction, type SendContext } from "@/lib/meta/send";
+import { logToDeadLetter } from "@/lib/dlq";
 import type { FlowDefinition } from "@/lib/engine/schema";
 
 export async function GET(request: Request) {
@@ -469,11 +470,19 @@ async function executeFlowActions(
       if (result.success) {
         console.log(`[webhook:flow] Sent ${effectiveAction.type}: "${effectiveAction.text.slice(0, 60)}"`);
       } else {
-        console.error(`[webhook:flow] Failed ${effectiveAction.type}: ${result.error}`);
+        console.error(`[webhook:flow] Failed ${effectiveAction.type}: ${result.error} (status=${result.statusCode})`);
+        await logToDeadLetter({
+          workspace_id: ctx.workspaceId,
+          event_type: `action:${effectiveAction.type}`,
+          platform_event_id: ctx.webhookEventId,
+          payload: { action: effectiveAction, recipientId: sendCtx.recipientId },
+          error_message: result.error ?? `HTTP ${result.statusCode}`,
+          error_context: { statusCode: result.statusCode, response: result.response },
+        });
       }
 
       if (!result.success && result.statusCode === 429) {
-        console.error("[webhook:flow] Rate limited by Meta API, stopping action execution");
+        console.error("[webhook:flow] Rate limited by Meta API after retries, stopping action execution");
         break;
       }
     }
@@ -1241,29 +1250,31 @@ export async function POST(request: Request) {
       }
 
       // Synchronous processing: handle events directly (bypassing Inngest)
-      if (event.event_type === "message") {
+      const handlers: Record<string, (s: typeof supabase, e: ParsedEvent) => Promise<void>> = {
+        message: handleMessageEvent,
+        comment: handleCommentEvent,
+        mention: handleStoryMentionEvent,
+        story_reply: handleStoryReplyEvent,
+      };
+
+      const handler = handlers[event.event_type];
+      if (handler) {
         try {
-          await handleMessageEvent(supabase, event);
+          await handler(supabase, event);
         } catch (err) {
-          console.error("[webhook:sync] Unhandled error processing message:", err, "eventId:", event.platform_event_id);
-        }
-      } else if (event.event_type === "comment") {
-        try {
-          await handleCommentEvent(supabase, event);
-        } catch (err) {
-          console.error("[webhook:sync] Unhandled error processing comment:", err, "eventId:", event.platform_event_id);
-        }
-      } else if (event.event_type === "mention") {
-        try {
-          await handleStoryMentionEvent(supabase, event);
-        } catch (err) {
-          console.error("[webhook:sync] Unhandled error processing mention:", err, "eventId:", event.platform_event_id);
-        }
-      } else if (event.event_type === "story_reply") {
-        try {
-          await handleStoryReplyEvent(supabase, event);
-        } catch (err) {
-          console.error("[webhook:sync] Unhandled error processing story reply:", err, "eventId:", event.platform_event_id);
+          const message = (err as Error).message ?? "Unknown error";
+          console.error(`[webhook:sync] Unhandled error processing ${event.event_type}:`, message, "eventId:", event.platform_event_id);
+          await logToDeadLetter({
+            event_type: event.event_type,
+            platform_event_id: event.platform_event_id,
+            payload: event.payload,
+            error_message: message,
+            error_context: {
+              ig_account_id: event.ig_account_id,
+              sender_id: event.sender_id,
+              stack: (err as Error).stack?.slice(0, 500),
+            },
+          });
         }
       } else {
         console.log(`[webhook] Skipping event type: ${event.event_type} eventId: ${event.platform_event_id}`);

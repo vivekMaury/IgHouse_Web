@@ -1,4 +1,5 @@
 import type { Action } from "@/lib/engine/step";
+import { fetchWithRetry } from "@/lib/meta/fetch-with-retry";
 
 const GRAPH_API = "https://graph.instagram.com/v21.0";
 
@@ -19,7 +20,7 @@ async function graphPost(
   body: Record<string, unknown>,
   token: string,
 ): Promise<ApiResult> {
-  const res = await fetch(`${GRAPH_API}${path}`, {
+  const res = await fetchWithRetry(`${GRAPH_API}${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
