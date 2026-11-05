@@ -38,6 +38,7 @@ type FlowContext = {
   payload: Record<string, unknown>;
   webhookEventId: string;
   accessToken: string;
+  commentId?: string;
 };
 
 function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent {
@@ -305,18 +306,49 @@ async function executeFlowActions(
   ctx: FlowContext,
 ): Promise<Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>> {
   const metaResponses = new Map<number, { success: boolean; response?: Record<string, unknown>; error?: string }>();
+  let privateReplySentForComment = false;
 
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i]!;
 
     if (action.type === "send_dm" || action.type === "send_comment_reply" || action.type === "send_private_reply") {
-      const result = await executeAction(action, sendCtx);
+      let effectiveAction = action;
+
+      // Comment triggers have no messaging window — route send_dm through Private Reply API
+      if (action.type === "send_dm" && ctx.commentId) {
+        if (privateReplySentForComment) {
+          console.log(`[webhook:flow] Skipping send_dm — already sent private reply for comment=${ctx.commentId}`);
+          metaResponses.set(i, { success: true, response: { skipped: "one_private_reply_per_comment" } });
+          continue;
+        }
+        effectiveAction = {
+          type: "send_private_reply",
+          text: action.text,
+          commentId: ctx.commentId,
+          quickReplies: action.quickReplies,
+        };
+        console.log(`[webhook:flow] Routing send_dm as private_reply via comment=${ctx.commentId}`);
+      }
+
+      if (effectiveAction.type === "send_private_reply") {
+        if (privateReplySentForComment) {
+          console.log(`[webhook:flow] Skipping duplicate private reply for comment=${ctx.commentId}`);
+          metaResponses.set(i, { success: true, response: { skipped: "one_private_reply_per_comment" } });
+          continue;
+        }
+      }
+
+      const result = await executeAction(effectiveAction, sendCtx);
       metaResponses.set(i, result);
 
+      if (result.success && (effectiveAction.type === "send_private_reply")) {
+        privateReplySentForComment = true;
+      }
+
       if (result.success) {
-        console.log(`[webhook:flow] Sent ${action.type}: "${action.text.slice(0, 60)}"`);
+        console.log(`[webhook:flow] Sent ${effectiveAction.type}: "${effectiveAction.text.slice(0, 60)}"`);
       } else {
-        console.error(`[webhook:flow] Failed ${action.type}: ${result.error}`);
+        console.error(`[webhook:flow] Failed ${effectiveAction.type}: ${result.error}`);
       }
 
       if (!result.success && result.statusCode === 429) {
@@ -765,6 +797,7 @@ async function handleCommentEvent(
       payload: event.payload,
       webhookEventId: commentId,
       accessToken,
+      commentId,
     });
   } catch (err) {
     console.error("[webhook:comment] Flow execution error:", (err as Error).message, "commentId:", commentId);
