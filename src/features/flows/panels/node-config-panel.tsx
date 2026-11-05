@@ -139,9 +139,9 @@ function TriggerConfig({ data, onChange }: { data: TriggerNode; onChange: (d: Tr
         />
       </div>
 
-      {(data.triggerType === "comment_keyword" || data.triggerType === "dm_keyword" || data.triggerType === "live_comment") && (
+      {(data.triggerType === "comment_keyword" || data.triggerType === "dm_keyword" || data.triggerType === "live_comment" || data.triggerType === "story_reply" || data.triggerType === "story_mention") && (
         <div className="space-y-1.5">
-          <FieldLabel>Keywords</FieldLabel>
+          <FieldLabel>Keywords {(data.triggerType === "story_reply" || data.triggerType === "story_mention") && <span className="font-normal text-muted-foreground">(optional)</span>}</FieldLabel>
           <div className="space-y-1.5">
             {keywords.map((kw, i) => (
               <div key={i} className="flex items-center gap-1">
@@ -155,6 +155,12 @@ function TriggerConfig({ data, onChange }: { data: TriggerNode; onChange: (d: Tr
           <Button variant="outline" size="sm" className="w-full text-xs" onClick={addKeyword}>
             <Plus className="mr-1 h-3 w-3" /> Add Keyword
           </Button>
+
+          {(data.triggerType === "story_reply" || data.triggerType === "story_mention") && keywords.length === 0 && (
+            <p className="text-[10px] text-muted-foreground">
+              No keywords = matches all {data.triggerType === "story_reply" ? "story replies" : "story mentions"}.
+            </p>
+          )}
 
           <div className="flex items-center gap-2 pt-1">
             <input
