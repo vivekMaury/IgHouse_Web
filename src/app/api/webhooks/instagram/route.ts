@@ -6,7 +6,7 @@ import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { fetchIgUserProfile } from "@/lib/meta/instagram";
 import { decryptToken } from "@/lib/crypto/token";
 import { syncConversationHistory } from "@/lib/meta/sync-history";
-import { matchFlows, type MatchableEvent } from "@/lib/engine/match";
+import { matchFlows, type MatchableEvent, type MatchResult } from "@/lib/engine/match";
 import { step as engineStep, type FlowRunState, type IncomingEvent, type Action } from "@/lib/engine/step";
 import { executeAction, type SendContext } from "@/lib/meta/send";
 import type { FlowDefinition } from "@/lib/engine/schema";
@@ -203,11 +203,11 @@ async function runAutomationFlows(
 
   console.log(`[webhook:flow] Matched ${matchResults.length} flow(s) for text="${matchableEvent.text?.slice(0, 40) ?? ""}"`);
 
-  // 3. Execute matched flows
+  // 3. Filter by cooldown, then pick the best match per trigger type
+  const runnableMatches: typeof matchResults = [];
+
   for (const match of matchResults) {
     const flow = matchableFlows.find((f) => f.id === match.flowId)!;
-
-    // Cooldown check
     const triggerNode = flow.definition.nodes.find((n) => n.data.type === "trigger");
     const cooldownHours = triggerNode?.data.type === "trigger" ? (triggerNode.data.cooldownHours ?? 24) : 24;
 
@@ -227,15 +227,40 @@ async function runAutomationFlows(
       }
     }
 
-    // Cancel existing running/waiting runs for this contact
+    runnableMatches.push(match);
+  }
+
+  if (runnableMatches.length === 0) return;
+
+  // Deduplicate: one flow per trigger type to prevent competing replies
+  const bestPerTriggerType = new Map<string, MatchResult>();
+  for (const match of runnableMatches) {
+    const flow = matchableFlows.find((f) => f.id === match.flowId)!;
+    const triggerNode = flow.definition.nodes.find((n) => n.data.type === "trigger");
+    const triggerType = triggerNode?.data.type === "trigger" ? triggerNode.data.triggerType : "unknown";
+
+    // First match wins (flows are ordered newest-version-first from the query)
+    if (!bestPerTriggerType.has(triggerType)) {
+      bestPerTriggerType.set(triggerType, match);
+    }
+  }
+
+  const flowsToExecute = [...bestPerTriggerType.values()];
+  console.log(`[webhook:flow] Executing ${flowsToExecute.length} flow(s) after dedup (from ${runnableMatches.length} runnable)`);
+
+  // 4. Cancel existing runs per-flow (not globally) and execute
+  for (const match of flowsToExecute) {
+    const flow = matchableFlows.find((f) => f.id === match.flowId)!;
+
+    // Cancel existing running/waiting runs for this contact in THIS flow only
     await supabase
       .from("flow_runs")
       .update({ status: "cancelled", completed_at: new Date().toISOString() } as Record<string, unknown>)
-      .eq("workspace_id", ctx.workspaceId)
+      .eq("flow_id", match.flowId)
       .eq("contact_id", ctx.contactId)
       .in("status", ["running", "waiting"]);
 
-    // Run the engine
+    // Run the engine with fresh isolated context
     const contactTags = await getContactTags(supabase, ctx.contactId);
 
     const initialState: FlowRunState = {
@@ -278,7 +303,7 @@ async function runAutomationFlows(
 
     const runId = (runData as { id: string } | null)?.id ?? "unknown";
 
-    // Execute Meta API actions
+    // Execute Meta API actions with isolated context
     const sendCtx: SendContext = { accessToken: ctx.accessToken, recipientId: ctx.senderId };
     const metaResponses = await executeFlowActions(result.actions, sendCtx, supabase, ctx);
 

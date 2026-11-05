@@ -115,6 +115,57 @@ describe("matchFlows", () => {
     expect(matchFlows(event, flows)).toHaveLength(2);
   });
 
+  it("coexisting DM and comment flows: comment event only matches comment_keyword", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["INFO"]),
+      makeFlow("comment-flow", "comment_keyword", ["INFO"]),
+    ];
+    const commentEvent: MatchableEvent = { eventType: "comment", text: "INFO please", commentId: "c123" };
+    const results = matchFlows(commentEvent, flows);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.flowId).toBe("comment-flow");
+  });
+
+  it("coexisting DM and comment flows: DM event only matches dm_keyword", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["INFO"]),
+      makeFlow("comment-flow", "comment_keyword", ["INFO"]),
+    ];
+    const dmEvent: MatchableEvent = { eventType: "message", text: "INFO please" };
+    const results = matchFlows(dmEvent, flows);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.flowId).toBe("dm-flow");
+  });
+
+  it("coexisting flows with different keywords: each matches only its keyword", () => {
+    const flows = [
+      makeFlow("dm-pricing", "dm_keyword", ["pricing"]),
+      makeFlow("dm-help", "dm_keyword", ["help"]),
+      makeFlow("comment-info", "comment_keyword", ["info"]),
+    ];
+
+    const dmPricing: MatchableEvent = { eventType: "message", text: "pricing question" };
+    expect(matchFlows(dmPricing, flows).map((r) => r.flowId)).toEqual(["dm-pricing"]);
+
+    const dmHelp: MatchableEvent = { eventType: "message", text: "need help" };
+    expect(matchFlows(dmHelp, flows).map((r) => r.flowId)).toEqual(["dm-help"]);
+
+    const commentInfo: MatchableEvent = { eventType: "comment", text: "info", commentId: "c1" };
+    expect(matchFlows(commentInfo, flows).map((r) => r.flowId)).toEqual(["comment-info"]);
+  });
+
+  it("story_mention flow does not match message or comment events", () => {
+    const flows = [
+      makeFlow("mention-flow", "story_mention"),
+      makeFlow("dm-flow", "dm_keyword", ["hi"]),
+    ];
+    const dmEvent: MatchableEvent = { eventType: "message", text: "hi" };
+    expect(matchFlows(dmEvent, flows).map((r) => r.flowId)).toEqual(["dm-flow"]);
+
+    const commentEvent: MatchableEvent = { eventType: "comment", text: "hi" };
+    expect(matchFlows(commentEvent, flows)).toHaveLength(0);
+  });
+
   it("skips flows without trigger node", () => {
     const noTrigger: MatchableFlow = {
       id: "f1",
