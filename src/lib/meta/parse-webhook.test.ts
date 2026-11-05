@@ -58,6 +58,43 @@ describe("parseWebhookPayload", () => {
     expect(events[0]!.ig_account_id).toBe("17841400000000001");
   });
 
+  it("parses a comment webhook event with text, from, and media", () => {
+    const payload: WebhookPayload = {
+      object: "instagram",
+      entry: [
+        {
+          id: "17841400000000001",
+          time: 1_700_000_000,
+          changes: [
+            {
+              field: "comments",
+              value: {
+                id: "comment-123",
+                from: { id: "user-456", username: "testuser" },
+                text: "INFO please",
+                media: { id: "media-789" },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseWebhookPayload(payload);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        platform_event_id: "comment-123",
+        event_type: "comment",
+        ig_account_id: "17841400000000001",
+        sender_id: "user-456",
+      }),
+    );
+    const p = events[0]!.payload as Record<string, unknown>;
+    expect(p.text).toBe("INFO please");
+    expect((p.media as { id: string }).id).toBe("media-789");
+  });
+
   it("skips echo messages", () => {
     const payload: WebhookPayload = {
       object: "instagram",

@@ -42,11 +42,12 @@ type FlowContext = {
 
 function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent {
   const message = payload.message as Record<string, unknown> | undefined;
+  const isComment = eventType === "comment";
   return {
     eventType: eventType as MatchableEvent["eventType"],
-    text: (message?.text as string) ?? undefined,
+    text: isComment ? (payload.text as string) ?? undefined : (message?.text as string) ?? undefined,
     postbackPayload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
-    commentId: eventType === "comment" ? (payload.id as string) : undefined,
+    commentId: isComment ? (payload.id as string) : undefined,
     mediaId: (payload.media as Record<string, unknown>)?.id as string | undefined,
   };
 }
@@ -57,11 +58,12 @@ function buildIncomingEvent(
   contact: { email?: string; phone?: string; tags: string[] },
 ): IncomingEvent {
   const message = payload.message as Record<string, unknown> | undefined;
+  const isComment = eventType === "comment";
   return {
-    type: eventType === "comment" || eventType === "mention" ? "trigger" : (eventType as IncomingEvent["type"]),
-    text: (message?.text as string) ?? undefined,
+    type: isComment || eventType === "mention" ? "trigger" : (eventType as IncomingEvent["type"]),
+    text: isComment ? (payload.text as string) ?? undefined : (message?.text as string) ?? undefined,
     payload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
-    commentId: eventType === "comment" ? (payload.id as string) : undefined,
+    commentId: isComment ? (payload.id as string) : undefined,
     senderId: (payload.sender as Record<string, unknown>)?.id as string ?? undefined,
     contactEmail: contact.email,
     contactPhone: contact.phone,
@@ -646,6 +648,129 @@ async function handleMessageEvent(
   }
 }
 
+async function handleCommentEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  event: ParsedEvent,
+) {
+  const payload = event.payload as Record<string, unknown>;
+  const commentId = payload.id as string;
+  const commentText = (payload.text as string) ?? null;
+  const from = payload.from as { id: string; username?: string } | undefined;
+  const mediaId = (payload.media as { id: string } | undefined)?.id ?? null;
+
+  if (!from) {
+    console.warn("[webhook:comment] No 'from' field in comment payload, skipping:", commentId);
+    return;
+  }
+
+  // Skip comments from our own account
+  if (from.id === event.ig_account_id) {
+    console.log("[webhook:comment] Ignoring own comment:", commentId);
+    return;
+  }
+
+  // 1. Look up connected account
+  const igAccountId = String(event.ig_account_id);
+  const { data: account } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
+    .eq("platform_account_id", igAccountId)
+    .eq("platform", "instagram")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!account) {
+    console.warn("[webhook:comment] No connected account for ig_account_id:", igAccountId);
+    return;
+  }
+
+  const { workspace_id, id: connected_account_id } = account;
+
+  // Decrypt access token
+  let accessToken: string | null = null;
+  try {
+    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
+    const ivHex = (account as Record<string, unknown>).token_iv as string;
+    accessToken = decryptToken(
+      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+    );
+  } catch (err) {
+    console.warn("[webhook:comment] Token decryption failed:", (err as Error).message);
+  }
+
+  if (!accessToken) {
+    console.warn("[webhook:comment] No access token, cannot run automations for comment:", commentId);
+    return;
+  }
+
+  // 2. Upsert the commenter as a contact
+  const contactUpsertData: Record<string, unknown> = {
+    workspace_id,
+    platform_scoped_id: from.id,
+  };
+  if (from.username) contactUpsertData.username = from.username;
+
+  const { data: contact, error: contactErr } = await supabase
+    .from("contacts")
+    .upsert(contactUpsertData, { onConflict: "workspace_id,platform_scoped_id" })
+    .select("id, opted_out, email, phone")
+    .single();
+
+  if (contactErr || !contact) {
+    console.error("[webhook:comment] Failed to upsert contact:", contactErr?.message);
+    return;
+  }
+
+  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+
+  if (typedContact.opted_out) {
+    console.log("[webhook:comment] Contact opted out, skipping:", from.id);
+    return;
+  }
+
+  // 3. Idempotency: check if we already processed this comment_id for private reply
+  const { data: existingRuns } = await supabase
+    .from("flow_runs")
+    .select("id")
+    .eq("workspace_id", workspace_id)
+    .eq("trigger_event_id", commentId)
+    .limit(1);
+
+  if (existingRuns && existingRuns.length > 0) {
+    console.log(`[webhook:comment] Already processed comment=${commentId}, skipping duplicate`);
+    return;
+  }
+
+  // 4. Update last_webhook_at
+  await supabase
+    .from("connected_accounts")
+    .update({ last_webhook_at: new Date().toISOString() })
+    .eq("id", connected_account_id);
+
+  console.log(
+    `[webhook:comment] Processing comment=${commentId} text="${commentText?.slice(0, 60) ?? ""}" from=${from.id} media=${mediaId}`,
+  );
+
+  // 5. Run automation flows for the comment trigger
+  try {
+    await runAutomationFlows(supabase, {
+      workspaceId: workspace_id,
+      connectedAccountId: connected_account_id,
+      contactId: typedContact.id,
+      contactEmail: typedContact.email,
+      contactPhone: typedContact.phone,
+      senderId: from.id,
+      eventType: event.event_type,
+      payload: event.payload,
+      webhookEventId: commentId,
+      accessToken,
+    });
+  } catch (err) {
+    console.error("[webhook:comment] Flow execution error:", (err as Error).message, "commentId:", commentId);
+  }
+}
+
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = await checkRateLimit(`webhook:${ip}`, "webhook");
@@ -704,15 +829,21 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // Synchronous processing: handle message events directly (bypassing Inngest)
+      // Synchronous processing: handle events directly (bypassing Inngest)
       if (event.event_type === "message") {
         try {
           await handleMessageEvent(supabase, event);
         } catch (err) {
           console.error("[webhook:sync] Unhandled error processing message:", err, "eventId:", event.platform_event_id);
         }
+      } else if (event.event_type === "comment") {
+        try {
+          await handleCommentEvent(supabase, event);
+        } catch (err) {
+          console.error("[webhook:sync] Unhandled error processing comment:", err, "eventId:", event.platform_event_id);
+        }
       } else {
-        console.log(`[webhook] Skipping non-message event type: ${event.event_type} (sync mode only handles messages)`);
+        console.log(`[webhook] Skipping event type: ${event.event_type} eventId: ${event.platform_event_id}`);
       }
     }
   }
