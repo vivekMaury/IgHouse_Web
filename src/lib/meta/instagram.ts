@@ -177,3 +177,37 @@ export async function getInstagramProfile(
     profile_picture_url: data.profile_picture_url,
   };
 }
+
+/**
+ * Check if a specific user follows the authenticated IG account.
+ * Paginates GET /me/followers (max ~500 entries) looking for the target user.
+ */
+export async function checkIsFollower(
+  targetUserId: string,
+  accessToken: string,
+  maxPages = 20,
+): Promise<boolean> {
+  let url: string | null =
+    `${GRAPH_API_BASE}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
+
+  for (let page = 0; page < maxPages && url; page++) {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[ig:followers] API returned ${res.status}, defaulting to false`);
+      return false;
+    }
+
+    const body = (await res.json()) as {
+      data: Array<{ id: string; username?: string }>;
+      paging?: { next?: string };
+    };
+
+    if (body.data.some((u) => u.id === targetUserId)) {
+      return true;
+    }
+
+    url = body.paging?.next ?? null;
+  }
+
+  return false;
+}

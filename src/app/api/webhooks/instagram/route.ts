@@ -3,7 +3,7 @@ import { verifyWebhookSignature, verifyGetChallenge } from "@/lib/meta/webhook-v
 import { parseWebhookPayload, type ParsedEvent, type WebhookPayload } from "@/lib/meta/parse-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { fetchIgUserProfile } from "@/lib/meta/instagram";
+import { fetchIgUserProfile, checkIsFollower } from "@/lib/meta/instagram";
 import { decryptToken } from "@/lib/crypto/token";
 import { syncConversationHistory } from "@/lib/meta/sync-history";
 import { matchFlows, type MatchableEvent, type MatchResult } from "@/lib/engine/match";
@@ -39,6 +39,7 @@ type FlowContext = {
   webhookEventId: string;
   accessToken: string;
   commentId?: string;
+  isFollower?: boolean;
 };
 
 const VALID_EVENT_TYPES = new Set<string>(["message", "comment", "postback", "mention", "story_reply"]);
@@ -73,7 +74,7 @@ function buildMatchableEvent(eventType: string, payload: Record<string, unknown>
 function buildIncomingEvent(
   eventType: string,
   payload: Record<string, unknown>,
-  contact: { email?: string; phone?: string; tags: string[] },
+  contact: { email?: string; phone?: string; tags: string[]; isFollower?: boolean },
 ): IncomingEvent {
   const message = payload.message as Record<string, unknown> | undefined;
   const isComment = eventType === "comment";
@@ -92,6 +93,7 @@ function buildIncomingEvent(
     payload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
     commentId: isComment ? (payload.id as string) : undefined,
     senderId: (payload.sender as Record<string, unknown>)?.id as string ?? undefined,
+    isFollower: contact.isFollower,
     contactEmail: contact.email,
     contactPhone: contact.phone,
     contactTags: contact.tags,
@@ -117,6 +119,15 @@ async function runAutomationFlows(
   supabase: ReturnType<typeof createAdminClient>,
   ctx: FlowContext,
 ) {
+  // 0. Check follower status for condition nodes
+  let isFollower = false;
+  try {
+    isFollower = await checkIsFollower(ctx.senderId, ctx.accessToken);
+    console.log(`[webhook:flow] Follower check sender=${ctx.senderId} isFollower=${isFollower}`);
+  } catch (err) {
+    console.warn("[webhook:flow] Follower check failed, defaulting to false:", (err as Error).message);
+  }
+
   // 1. Check for existing waiting flow run (lead capture / wait-for-reply)
   const { data: waitingRunRows } = await supabase
     .from("flow_runs")
@@ -178,6 +189,7 @@ async function runAutomationFlows(
           email: ctx.contactEmail ?? undefined,
           phone: ctx.contactPhone ?? undefined,
           tags: contactTags,
+          isFollower,
         });
 
         const result = engineStep(runState, incomingEvent, flowDef);
