@@ -78,15 +78,8 @@ export function matchFlows(
       continue;
     }
 
-    const needsKeywords =
-      trigger.data.triggerType === "comment_keyword" ||
-      trigger.data.triggerType === "dm_keyword" ||
-      trigger.data.triggerType === "live_comment";
-
-    if (needsKeywords) {
-      if (
-        !keywordsMatch(event.text, trigger.data.keywords, trigger.data.matchAll)
-      ) {
+    if (trigger.data.keywords?.length) {
+      if (!keywordsMatch(event.text, trigger.data.keywords, trigger.data.matchAll)) {
         continue;
       }
     }

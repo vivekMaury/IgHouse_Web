@@ -96,6 +96,45 @@ describe("matchFlows", () => {
     expect(matchFlows({ eventType: "mention" }, flows)).toHaveLength(0);
   });
 
+  it("story_reply with keywords only matches when text contains keyword", () => {
+    const flows = [makeFlow("f1", "story_reply", ["GUIDE"])];
+    expect(matchFlows({ eventType: "story_reply", text: "send me the GUIDE" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "story_reply", text: "Love this!" }, flows)).toHaveLength(0);
+  });
+
+  it("story_reply without keywords acts as catch-all", () => {
+    const flows = [makeFlow("f1", "story_reply")];
+    expect(matchFlows({ eventType: "story_reply", text: "anything here" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "story_reply", text: "" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "story_reply" }, flows)).toHaveLength(1);
+  });
+
+  it("story_mention with keywords only matches when text contains keyword", () => {
+    const flows = [makeFlow("f1", "story_mention", ["COLLAB"])];
+    expect(matchFlows({ eventType: "mention", text: "COLLAB with me!" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "mention", text: "nice story" }, flows)).toHaveLength(0);
+  });
+
+  it("story_mention without keywords acts as catch-all", () => {
+    const flows = [makeFlow("f1", "story_mention")];
+    expect(matchFlows({ eventType: "mention" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "mention", text: "anything" }, flows)).toHaveLength(1);
+  });
+
+  it("keyword-filtered story_reply coexists with catch-all: specific wins when text matches", () => {
+    const flows = [
+      makeFlow("catch-all", "story_reply"),
+      makeFlow("guide-flow", "story_reply", ["GUIDE"]),
+    ];
+    const guideReply: MatchableEvent = { eventType: "story_reply", text: "Send GUIDE" };
+    const genericReply: MatchableEvent = { eventType: "story_reply", text: "cool story" };
+
+    // Both match "GUIDE" text (catch-all + keyword)
+    expect(matchFlows(guideReply, flows).map((r) => r.flowId)).toEqual(["catch-all", "guide-flow"]);
+    // Only catch-all matches generic text
+    expect(matchFlows(genericReply, flows).map((r) => r.flowId)).toEqual(["catch-all"]);
+  });
+
   it("all trigger types coexist: each event matches only its trigger", () => {
     const flows = [
       makeFlow("dm-flow", "dm_keyword", ["hi"]),
