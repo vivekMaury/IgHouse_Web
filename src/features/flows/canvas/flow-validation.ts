@@ -6,6 +6,48 @@ export type ValidationError = {
   severity: "error" | "warning";
 };
 
+function detectCycles(def: FlowDefinition): string[][] {
+  const adj = new Map<string, string[]>();
+  for (const edge of def.edges) {
+    const list = adj.get(edge.source) ?? [];
+    list.push(edge.target);
+    adj.set(edge.source, list);
+  }
+
+  const cycles: string[][] = [];
+  const visited = new Set<string>();
+  const stack = new Set<string>();
+  const path: string[] = [];
+
+  function dfs(nodeId: string) {
+    visited.add(nodeId);
+    stack.add(nodeId);
+    path.push(nodeId);
+
+    for (const neighbor of adj.get(nodeId) ?? []) {
+      if (stack.has(neighbor)) {
+        const cycleStart = path.indexOf(neighbor);
+        cycles.push(path.slice(cycleStart));
+        return;
+      }
+      if (!visited.has(neighbor)) {
+        dfs(neighbor);
+      }
+    }
+
+    path.pop();
+    stack.delete(nodeId);
+  }
+
+  for (const node of def.nodes) {
+    if (!visited.has(node.id)) {
+      dfs(node.id);
+    }
+  }
+
+  return cycles;
+}
+
 export function validateFlow(def: FlowDefinition): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -134,6 +176,15 @@ export function validateFlow(def: FlowDefinition): ValidationError[] {
         });
       }
     }
+  }
+
+  const cycles = detectCycles(def);
+  for (const cycle of cycles) {
+    errors.push({
+      nodeId: cycle[0],
+      message: `Infinite loop detected: ${cycle.join(" → ")} → ${cycle[0]!}`,
+      severity: "error",
+    });
   }
 
   return errors;

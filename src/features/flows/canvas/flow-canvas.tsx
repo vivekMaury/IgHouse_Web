@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -23,12 +23,17 @@ import { nodeTypes } from "../nodes";
 import { FlowToolbar } from "./flow-toolbar";
 import { NodeConfigPanel } from "../panels/node-config-panel";
 import { validateFlow, type ValidationError } from "./flow-validation";
+import { useUndoRedo } from "./use-undo-redo";
 import type { NodeData, FlowDefinition } from "@/lib/engine/schema";
 import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
   Zap,
+  Undo2,
+  Redo2,
+  Copy,
+  Clipboard,
 } from "lucide-react";
 
 let nodeIdCounter = 0;
@@ -128,6 +133,92 @@ function FlowCanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  const { takeSnapshot, undo, redo, canUndo, canRedo } = useUndoRedo(
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+  );
+
+  // Clipboard for copy/paste
+  const clipboard = useRef<Node[]>([]);
+
+  const copySelectedNodes = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0 && selectedNodeId) {
+      const node = nodes.find((n) => n.id === selectedNodeId);
+      if (node) clipboard.current = [structuredClone(node)];
+    } else {
+      clipboard.current = structuredClone(selected);
+    }
+  }, [nodes, selectedNodeId]);
+
+  const pasteNodes = useCallback(() => {
+    if (clipboard.current.length === 0) return;
+    takeSnapshot();
+    const newNodes: Node[] = clipboard.current.map((n) => ({
+      ...structuredClone(n),
+      id: getNodeId(),
+      position: { x: n.position.x + 40, y: n.position.y + 40 },
+      selected: false,
+    }));
+    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...newNodes]);
+    if (newNodes.length === 1) setSelectedNodeId(newNodes[0]!.id);
+  }, [setNodes, takeSnapshot]);
+
+  const duplicateSelected = useCallback(() => {
+    copySelectedNodes();
+    pasteNodes();
+  }, [copySelectedNodes, pasteNodes]);
+
+  // Real-time validation: re-compute on every node/edge change once validation is shown
+  const liveErrors = (() => {
+    if (!showValidation) return validationErrors;
+    const def: FlowDefinition = {
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        data: n.data as NodeData,
+        position: n.position,
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? undefined,
+        targetHandle: e.targetHandle ?? undefined,
+      })),
+    };
+    return validateFlow(def);
+  })();
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      } else if (mod && e.key === "c") {
+        e.preventDefault();
+        copySelectedNodes();
+      } else if (mod && e.key === "v") {
+        e.preventDefault();
+        pasteNodes();
+      } else if (mod && e.key === "d") {
+        e.preventDefault();
+        duplicateSelected();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo, copySelectedNodes, pasteNodes, duplicateSelected]);
+
   const isValidConnection = useCallback(
     (connection: Edge | Connection) => {
       if (connection.source === connection.target) return false;
@@ -148,14 +239,16 @@ function FlowCanvasInner({
 
   const onConnect = useCallback(
     (params: Connection) => {
+      takeSnapshot();
       const props = edgePropsFor(params.sourceHandle, params.targetHandle);
       setEdges((eds) => addEdge({ ...params, ...props }, eds));
     },
-    [setEdges],
+    [setEdges, takeSnapshot],
   );
 
   const handleAddNode = useCallback(
     (data: NodeData) => {
+      takeSnapshot();
       const id = getNodeId();
       const wrapper = reactFlowWrapper.current;
       const rect = wrapper?.getBoundingClientRect();
@@ -174,7 +267,7 @@ function FlowCanvasInner({
       setNodes((nds) => [...nds, newNode]);
       setSelectedNodeId(id);
     },
-    [setNodes, screenToFlowPosition],
+    [setNodes, screenToFlowPosition, takeSnapshot],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
@@ -187,22 +280,24 @@ function FlowCanvasInner({
 
   const handleNodeDataChange = useCallback(
     (nodeId: string, newData: NodeData) => {
+      takeSnapshot();
       setNodes((nds) =>
         nds.map((n) => (n.id === nodeId ? { ...n, data: newData } : n)),
       );
     },
-    [setNodes],
+    [setNodes, takeSnapshot],
   );
 
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
+      takeSnapshot();
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
       setEdges((eds) =>
         eds.filter((e) => e.source !== nodeId && e.target !== nodeId),
       );
       setSelectedNodeId(null);
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, takeSnapshot],
   );
 
   const getDefinition = useCallback(
@@ -239,10 +334,10 @@ function FlowCanvasInner({
     ? nodes.find((n) => n.id === selectedNodeId)
     : null;
 
-  const errorCount = validationErrors.filter(
+  const errorCount = liveErrors.filter(
     (e) => e.severity === "error",
   ).length;
-  const warnCount = validationErrors.filter(
+  const warnCount = liveErrors.filter(
     (e) => e.severity === "warning",
   ).length;
 
@@ -253,7 +348,42 @@ function FlowCanvasInner({
         <div className="flex shrink-0 flex-col gap-2 border-b border-border/60 px-3 py-2 md:flex-row md:items-center md:justify-between md:px-4">
           <FlowToolbar onAddNode={handleAddNode} />
           <div className="flex items-center justify-between gap-2 md:justify-end">
-            {showValidation && validationErrors.length > 0 && (
+            {/* Undo / Redo / Copy / Paste */}
+            <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/30 p-0.5">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Y)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </button>
+              <div className="mx-0.5 h-4 w-px bg-border/60" />
+              <button
+                onClick={copySelectedNodes}
+                title="Copy (Ctrl+C)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={pasteNodes}
+                title="Paste (Ctrl+V)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {showValidation && liveErrors.length > 0 && (
               <div className="flex items-center gap-1.5 text-xs">
                 {errorCount > 0 && (
                   <span className="flex items-center gap-1 text-destructive">
@@ -269,7 +399,7 @@ function FlowCanvasInner({
                 )}
               </div>
             )}
-            {showValidation && validationErrors.length === 0 && (
+            {showValidation && liveErrors.length === 0 && (
               <span className="flex items-center gap-1 text-xs text-emerald-600">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Valid
               </span>
@@ -285,9 +415,9 @@ function FlowCanvasInner({
         </div>
 
         {/* Validation errors banner */}
-        {showValidation && validationErrors.length > 0 && (
+        {showValidation && liveErrors.length > 0 && (
           <div className="border-b border-border/60 bg-muted/30 px-4 py-2 space-y-1">
-            {validationErrors.map((err, i) => (
+            {liveErrors.map((err, i) => (
               <div key={i} className="flex items-start gap-1.5 text-xs">
                 {err.severity === "error" ? (
                   <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
