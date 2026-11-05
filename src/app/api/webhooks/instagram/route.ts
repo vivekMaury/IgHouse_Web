@@ -237,11 +237,13 @@ async function runAutomationFlows(
       definition: f.flow_versions[0]!.definition as FlowDefinition,
     }));
 
-  // Diagnostic: log what we're matching against
+  // Diagnostic: log candidate flows with their trigger types
+  const triggerTypeCounts = new Map<string, number>();
   for (const f of matchableFlows) {
     const trig = f.definition.nodes.find((n) => n.data.type === "trigger");
     const tt = trig?.data.type === "trigger" ? trig.data.triggerType : "none";
     const kw = trig?.data.type === "trigger" ? trig.data.keywords : undefined;
+    triggerTypeCounts.set(tt, (triggerTypeCounts.get(tt) ?? 0) + 1);
     console.log(`[webhook:flow] Candidate flow=${f.id} triggerType=${tt} keywords=${JSON.stringify(kw ?? [])} eventType=${matchableEvent.eventType}`);
   }
 
@@ -251,7 +253,20 @@ async function runAutomationFlows(
   );
 
   if (matchResults.length === 0) {
-    console.log(`[webhook:flow] No matching flows for eventType="${matchableEvent.eventType}" text="${matchableEvent.text?.slice(0, 40) ?? ""}" workspace=${ctx.workspaceId}`);
+    const availableTriggers = [...triggerTypeCounts.entries()].map(([t, c]) => `${t}(${c})`).join(", ");
+    if (matchableEvent.eventType === "story_reply" || matchableEvent.eventType === "mention") {
+      const needed = matchableEvent.eventType === "story_reply" ? "story_reply" : "story_mention";
+      console.warn(
+        `[webhook:flow] No ${needed} trigger flow found for eventType="${matchableEvent.eventType}" text="${matchableEvent.text?.slice(0, 40) ?? ""}" ` +
+        `workspace=${ctx.workspaceId}. Published trigger types: [${availableTriggers}]. ` +
+        `Create and publish a flow with trigger type "${needed}" to handle this event.`,
+      );
+    } else {
+      console.log(
+        `[webhook:flow] No matching flows for eventType="${matchableEvent.eventType}" text="${matchableEvent.text?.slice(0, 40) ?? ""}" ` +
+        `workspace=${ctx.workspaceId}. Published trigger types: [${availableTriggers}]`,
+      );
+    }
     return;
   }
 

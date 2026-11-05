@@ -239,6 +239,40 @@ describe("matchFlows", () => {
     expect(matchFlows(commentEvent, flows)).toHaveLength(0);
   });
 
+  it("story_reply never leaks into dm_keyword even with matching text", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["Hii"]),
+      makeFlow("comment-flow", "comment_keyword", ["Hii"]),
+    ];
+    const storyReply: MatchableEvent = { eventType: "story_reply", text: "Hii", storyId: "s1" };
+    expect(matchFlows(storyReply, flows)).toHaveLength(0);
+  });
+
+  it("story_reply catch-all matches when only dm_keyword and story_reply flows exist", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["Hii"]),
+      makeFlow("story-flow", "story_reply"),
+    ];
+    const storyReply: MatchableEvent = { eventType: "story_reply", text: "Hii", storyId: "s1" };
+    const results = matchFlows(storyReply, flows);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.flowId).toBe("story-flow");
+  });
+
+  it("story_reply with empty-string keywords acts as catch-all", () => {
+    const flows = [makeFlow("f1", "story_reply", ["", ""])];
+    expect(matchFlows({ eventType: "story_reply", text: "Hii" }, flows)).toHaveLength(1);
+    expect(matchFlows({ eventType: "story_reply" }, flows)).toHaveLength(1);
+  });
+
+  it("story_mention never leaks into dm_keyword or story_reply", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["hi"]),
+      makeFlow("reply-flow", "story_reply"),
+    ];
+    expect(matchFlows({ eventType: "mention", storyId: "s1" }, flows)).toHaveLength(0);
+  });
+
   it("skips flows without trigger node", () => {
     const noTrigger: MatchableFlow = {
       id: "f1",

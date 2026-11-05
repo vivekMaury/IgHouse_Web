@@ -78,8 +78,11 @@ export function matchFlows(
       continue;
     }
 
-    if (trigger.data.keywords?.length) {
-      if (!keywordsMatch(event.text, trigger.data.keywords, trigger.data.matchAll)) {
+    // Keyword filtering: only applied when keywords are explicitly configured.
+    // Empty/undefined keywords = catch-all (matches any text).
+    const keywords = trigger.data.keywords?.filter((k) => k.length > 0);
+    if (keywords && keywords.length > 0) {
+      if (!keywordsMatch(event.text, keywords, trigger.data.matchAll)) {
         continue;
       }
     }
