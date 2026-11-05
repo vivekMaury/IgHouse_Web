@@ -70,10 +70,44 @@ describe("matchFlows", () => {
     expect(matchFlows(event, flows)).toHaveLength(0);
   });
 
-  it("matches story_mention trigger", () => {
+  it("matches story_mention trigger on mention event", () => {
     const flows = [makeFlow("f1", "story_mention")];
-    const event: MatchableEvent = { eventType: "mention" };
+    const event: MatchableEvent = { eventType: "mention", storyId: "story-123" };
     expect(matchFlows(event, flows)).toHaveLength(1);
+  });
+
+  it("story_mention trigger does not match message or comment events", () => {
+    const flows = [makeFlow("f1", "story_mention")];
+    expect(matchFlows({ eventType: "message", text: "hi" }, flows)).toHaveLength(0);
+    expect(matchFlows({ eventType: "comment", text: "hi" }, flows)).toHaveLength(0);
+    expect(matchFlows({ eventType: "story_reply", text: "hi" }, flows)).toHaveLength(0);
+  });
+
+  it("matches story_reply trigger on story_reply event", () => {
+    const flows = [makeFlow("f1", "story_reply")];
+    const event: MatchableEvent = { eventType: "story_reply", text: "Love this!", storyId: "story-456" };
+    expect(matchFlows(event, flows)).toHaveLength(1);
+  });
+
+  it("story_reply trigger does not match regular message or comment events", () => {
+    const flows = [makeFlow("f1", "story_reply")];
+    expect(matchFlows({ eventType: "message", text: "hi" }, flows)).toHaveLength(0);
+    expect(matchFlows({ eventType: "comment", text: "hi" }, flows)).toHaveLength(0);
+    expect(matchFlows({ eventType: "mention" }, flows)).toHaveLength(0);
+  });
+
+  it("all trigger types coexist: each event matches only its trigger", () => {
+    const flows = [
+      makeFlow("dm-flow", "dm_keyword", ["hi"]),
+      makeFlow("comment-flow", "comment_keyword", ["info"]),
+      makeFlow("mention-flow", "story_mention"),
+      makeFlow("reply-flow", "story_reply"),
+    ];
+
+    expect(matchFlows({ eventType: "message", text: "hi" }, flows).map((r) => r.flowId)).toEqual(["dm-flow"]);
+    expect(matchFlows({ eventType: "comment", text: "info" }, flows).map((r) => r.flowId)).toEqual(["comment-flow"]);
+    expect(matchFlows({ eventType: "mention" }, flows).map((r) => r.flowId)).toEqual(["mention-flow"]);
+    expect(matchFlows({ eventType: "story_reply", text: "wow" }, flows).map((r) => r.flowId)).toEqual(["reply-flow"]);
   });
 
   it("matchAll requires all keywords present", () => {

@@ -41,19 +41,32 @@ type FlowContext = {
   commentId?: string;
 };
 
-const VALID_EVENT_TYPES = new Set<string>(["message", "comment", "postback", "mention"]);
+const VALID_EVENT_TYPES = new Set<string>(["message", "comment", "postback", "mention", "story_reply"]);
 
 function buildMatchableEvent(eventType: string, payload: Record<string, unknown>): MatchableEvent | null {
   if (!VALID_EVENT_TYPES.has(eventType)) return null;
 
   const message = payload.message as Record<string, unknown> | undefined;
   const isComment = eventType === "comment";
+  const isMention = eventType === "mention";
+  const isStoryReply = eventType === "story_reply";
+
+  let text: string | undefined;
+  if (isComment || isMention) {
+    text = (payload.text as string) ?? undefined;
+  } else {
+    text = (message?.text as string) ?? undefined;
+  }
+
+  const replyTo = message?.reply_to as { story?: { id: string } } | undefined;
+
   return {
     eventType: eventType as MatchableEvent["eventType"],
-    text: isComment ? (payload.text as string) ?? undefined : (message?.text as string) ?? undefined,
+    text,
     postbackPayload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
     commentId: isComment ? (payload.id as string) : undefined,
-    mediaId: (payload.media as Record<string, unknown>)?.id as string | undefined,
+    mediaId: isMention ? (payload.media as Record<string, unknown>)?.id as string ?? (payload.id as string) : (payload.media as Record<string, unknown>)?.id as string | undefined,
+    storyId: isStoryReply ? replyTo?.story?.id : isMention ? (payload.id as string) : undefined,
   };
 }
 
@@ -64,9 +77,18 @@ function buildIncomingEvent(
 ): IncomingEvent {
   const message = payload.message as Record<string, unknown> | undefined;
   const isComment = eventType === "comment";
+  const isMention = eventType === "mention";
+
+  let text: string | undefined;
+  if (isComment || isMention) {
+    text = (payload.text as string) ?? undefined;
+  } else {
+    text = (message?.text as string) ?? undefined;
+  }
+
   return {
-    type: isComment || eventType === "mention" ? "trigger" : (eventType as IncomingEvent["type"]),
-    text: isComment ? (payload.text as string) ?? undefined : (message?.text as string) ?? undefined,
+    type: isComment || isMention || eventType === "story_reply" ? "trigger" : (eventType as IncomingEvent["type"]),
+    text,
     payload: (payload.postback as Record<string, unknown>)?.payload as string | undefined,
     commentId: isComment ? (payload.id as string) : undefined,
     senderId: (payload.sender as Record<string, unknown>)?.id as string ?? undefined,
@@ -128,7 +150,8 @@ async function runAutomationFlows(
       const triggerNode = flowDef.nodes.find((n) => n.data.type === "trigger");
       const triggerType = triggerNode?.data.type === "trigger" ? triggerNode.data.triggerType : null;
       const resumeAllowed =
-        (ctx.eventType === "message" && (triggerType === "dm_keyword" || triggerType === "story_reply")) ||
+        (ctx.eventType === "message" && triggerType === "dm_keyword") ||
+        (ctx.eventType === "story_reply" && triggerType === "story_reply") ||
         (ctx.eventType === "comment" && (triggerType === "comment_keyword" || triggerType === "live_comment")) ||
         (ctx.eventType === "postback" && triggerType === "ice_breaker") ||
         (ctx.eventType === "mention" && triggerType === "story_mention");
@@ -852,6 +875,263 @@ async function handleCommentEvent(
   }
 }
 
+async function handleStoryMentionEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  event: ParsedEvent,
+) {
+  const payload = event.payload as Record<string, unknown>;
+  const from = payload.from as { id: string; username?: string } | undefined;
+  const mediaId = (payload.media as { id: string } | undefined)?.id ?? (payload.id as string);
+
+  if (!from) {
+    console.warn("[webhook:mention] No 'from' field in mention payload, skipping");
+    return;
+  }
+
+  if (from.id === event.ig_account_id) {
+    console.log("[webhook:mention] Ignoring own mention");
+    return;
+  }
+
+  const igAccountId = String(event.ig_account_id);
+  const { data: account } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
+    .eq("platform_account_id", igAccountId)
+    .eq("platform", "instagram")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!account) {
+    console.warn("[webhook:mention] No connected account for ig_account_id:", igAccountId);
+    return;
+  }
+
+  const { workspace_id, id: connected_account_id } = account;
+
+  let accessToken: string | null = null;
+  try {
+    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
+    const ivHex = (account as Record<string, unknown>).token_iv as string;
+    accessToken = decryptToken(
+      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+    );
+  } catch (err) {
+    console.warn("[webhook:mention] Token decryption failed:", (err as Error).message);
+  }
+
+  if (!accessToken) {
+    console.warn("[webhook:mention] No access token for mention event");
+    return;
+  }
+
+  const contactUpsertData: Record<string, unknown> = {
+    workspace_id,
+    platform_scoped_id: from.id,
+  };
+  if (from.username) contactUpsertData.username = from.username;
+
+  const { data: contact, error: contactErr } = await supabase
+    .from("contacts")
+    .upsert(contactUpsertData, { onConflict: "workspace_id,platform_scoped_id" })
+    .select("id, opted_out, email, phone")
+    .single();
+
+  if (contactErr || !contact) {
+    console.error("[webhook:mention] Failed to upsert contact:", contactErr?.message);
+    return;
+  }
+
+  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+
+  if (typedContact.opted_out) {
+    console.log("[webhook:mention] Contact opted out, skipping:", from.id);
+    return;
+  }
+
+  // Idempotency check
+  const { data: existingRuns } = await supabase
+    .from("flow_runs")
+    .select("id")
+    .eq("workspace_id", workspace_id)
+    .eq("trigger_event_id", event.platform_event_id)
+    .limit(1);
+
+  if (existingRuns && existingRuns.length > 0) {
+    console.log(`[webhook:mention] Already processed mention=${event.platform_event_id}, skipping`);
+    return;
+  }
+
+  await supabase
+    .from("connected_accounts")
+    .update({ last_webhook_at: new Date().toISOString() })
+    .eq("id", connected_account_id);
+
+  console.log(`[webhook:mention] Processing mention from=${from.id} media=${mediaId}`);
+
+  try {
+    await runAutomationFlows(supabase, {
+      workspaceId: workspace_id,
+      connectedAccountId: connected_account_id,
+      contactId: typedContact.id,
+      contactEmail: typedContact.email,
+      contactPhone: typedContact.phone,
+      senderId: from.id,
+      eventType: event.event_type,
+      payload: event.payload,
+      webhookEventId: event.platform_event_id,
+      accessToken,
+    });
+  } catch (err) {
+    console.error("[webhook:mention] Flow execution error:", (err as Error).message);
+  }
+}
+
+async function handleStoryReplyEvent(
+  supabase: ReturnType<typeof createAdminClient>,
+  event: ParsedEvent,
+) {
+  const payload = event.payload as Record<string, unknown>;
+  const message = payload.message as { mid: string; text?: string; reply_to?: { story?: { id: string; url?: string } } } | undefined;
+  const messageText = message?.text ?? null;
+  const storyId = message?.reply_to?.story?.id ?? null;
+  const timestamp = payload.timestamp as number | undefined;
+
+  const igAccountId = String(event.ig_account_id);
+  const { data: account } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
+    .eq("platform_account_id", igAccountId)
+    .eq("platform", "instagram")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!account) {
+    console.warn("[webhook:story-reply] No connected account for ig_account_id:", igAccountId);
+    return;
+  }
+
+  const { workspace_id, id: connected_account_id } = account;
+
+  let accessToken: string | null = null;
+  try {
+    const tokenHex = (account as Record<string, unknown>).encrypted_access_token as string;
+    const ivHex = (account as Record<string, unknown>).token_iv as string;
+    accessToken = decryptToken(
+      Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+      Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+    );
+  } catch (err) {
+    console.warn("[webhook:story-reply] Token decryption failed:", (err as Error).message);
+  }
+
+  // Upsert contact
+  const { data: contact, error: contactErr } = await supabase
+    .from("contacts")
+    .upsert(
+      { workspace_id, platform_scoped_id: event.sender_id },
+      { onConflict: "workspace_id,platform_scoped_id" },
+    )
+    .select("id, opted_out, email, phone")
+    .single();
+
+  if (contactErr || !contact) {
+    console.error("[webhook:story-reply] Failed to upsert contact:", contactErr?.message);
+    return;
+  }
+
+  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+
+  if (typedContact.opted_out) {
+    console.log("[webhook:story-reply] Contact opted out, skipping:", event.sender_id);
+    return;
+  }
+
+  // Enrich contact profile
+  if (accessToken) {
+    try {
+      const profile = await fetchIgUserProfile(event.sender_id, accessToken);
+      const updates: Record<string, unknown> = {};
+      if (profile.username) updates.username = profile.username;
+      if (profile.name) updates.full_name = profile.name;
+      if (profile.profile_pic) updates.avatar_url = profile.profile_pic;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("contacts").update(updates).eq("id", contact.id);
+      }
+    } catch {
+      // non-critical
+    }
+  }
+
+  // Upsert conversation and save the inbound story reply as a message
+  const { data: conversation } = await supabase
+    .from("conversations")
+    .upsert(
+      { workspace_id, contact_id: contact.id, connected_account_id, status: "open" },
+      { onConflict: "workspace_id,contact_id,connected_account_id" },
+    )
+    .select("id, bot_paused, bot_paused_until")
+    .single();
+
+  if (!conversation) {
+    console.error("[webhook:story-reply] Failed to upsert conversation");
+    return;
+  }
+
+  const typedConversation = conversation as { id: string; bot_paused: boolean; bot_paused_until: string | null };
+  const sentAt = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+
+  await supabase.from("messages").insert({
+    workspace_id,
+    conversation_id: conversation.id,
+    direction: "inbound" as const,
+    source: "human" as const,
+    content: messageText,
+    platform_message_id: event.platform_event_id,
+    metadata: { story_id: storyId, type: "story_reply" },
+    sent_at: sentAt,
+  });
+
+  await supabase.from("conversations").update({ last_message_at: sentAt }).eq("id", conversation.id);
+  await supabase.rpc("increment_unread", { conversation_id: conversation.id });
+  await supabase.from("connected_accounts").update({ last_webhook_at: new Date().toISOString() }).eq("id", connected_account_id);
+
+  console.log(`[webhook:story-reply] Saved story reply mid=${event.platform_event_id} story=${storyId} text="${messageText?.slice(0, 40) ?? ""}"`);
+
+  // Auto-resume bot if pause expired
+  let botPaused = typedConversation.bot_paused;
+  if (botPaused && typedConversation.bot_paused_until) {
+    if (new Date(typedConversation.bot_paused_until) < new Date()) {
+      await supabase
+        .from("conversations")
+        .update({ bot_paused: false, bot_paused_until: null } as Record<string, unknown>)
+        .eq("id", typedConversation.id);
+      botPaused = false;
+    }
+  }
+
+  // Run automation flows — story replies open a 24h DM window so send_dm works directly
+  if (!botPaused && accessToken) {
+    try {
+      await runAutomationFlows(supabase, {
+        workspaceId: workspace_id,
+        connectedAccountId: connected_account_id,
+        contactId: typedContact.id,
+        contactEmail: typedContact.email,
+        contactPhone: typedContact.phone,
+        senderId: event.sender_id,
+        eventType: event.event_type,
+        payload: event.payload,
+        webhookEventId: event.platform_event_id,
+        accessToken,
+      });
+    } catch (err) {
+      console.error("[webhook:story-reply] Flow execution error:", (err as Error).message);
+    }
+  }
+}
+
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = await checkRateLimit(`webhook:${ip}`, "webhook");
@@ -922,6 +1202,18 @@ export async function POST(request: Request) {
           await handleCommentEvent(supabase, event);
         } catch (err) {
           console.error("[webhook:sync] Unhandled error processing comment:", err, "eventId:", event.platform_event_id);
+        }
+      } else if (event.event_type === "mention") {
+        try {
+          await handleStoryMentionEvent(supabase, event);
+        } catch (err) {
+          console.error("[webhook:sync] Unhandled error processing mention:", err, "eventId:", event.platform_event_id);
+        }
+      } else if (event.event_type === "story_reply") {
+        try {
+          await handleStoryReplyEvent(supabase, event);
+        } catch (err) {
+          console.error("[webhook:sync] Unhandled error processing story reply:", err, "eventId:", event.platform_event_id);
         }
       } else {
         console.log(`[webhook] Skipping event type: ${event.event_type} eventId: ${event.platform_event_id}`);

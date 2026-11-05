@@ -1,11 +1,12 @@
 import type { FlowDefinition, TriggerNode } from "./schema";
 
 export type MatchableEvent = {
-  eventType: "message" | "comment" | "postback" | "mention";
+  eventType: "message" | "comment" | "postback" | "mention" | "story_reply";
   text?: string;
   postbackPayload?: string;
   commentId?: string;
   mediaId?: string;
+  storyId?: string;
 };
 
 export type MatchableFlow = {
@@ -39,7 +40,7 @@ function eventTypeMatchesTrigger(
     case "story_mention":
       return eventType === "mention";
     case "story_reply":
-      return eventType === "message";
+      return eventType === "story_reply";
     case "ice_breaker":
       return eventType === "postback";
     default:

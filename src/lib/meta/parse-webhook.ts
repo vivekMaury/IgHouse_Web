@@ -11,6 +11,10 @@ export type WebhookEntry = {
       attachments?: Array<{ type: string; payload: { url: string } }>;
       quick_reply?: { payload: string };
       is_echo?: boolean;
+      reply_to?: {
+        mid?: string;
+        story?: { id: string; url?: string };
+      };
     };
     postback?: { mid: string; payload: string; title: string };
     read?: { watermark: number };
@@ -54,9 +58,10 @@ export function parseWebhookPayload(body: WebhookPayload): ParsedEvent[] {
         if (msg.message?.is_echo) continue;
 
         if (msg.message) {
+          const isStoryReply = Boolean(msg.message.reply_to?.story);
           events.push({
             platform_event_id: msg.message.mid,
-            event_type: "message",
+            event_type: isStoryReply ? "story_reply" : "message",
             ig_account_id: igAccountId,
             sender_id: msg.sender.id,
             payload: msg as unknown as Record<string, unknown>,
