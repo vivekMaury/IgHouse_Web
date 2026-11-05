@@ -237,17 +237,25 @@ async function runAutomationFlows(
       definition: f.flow_versions[0]!.definition as FlowDefinition,
     }));
 
+  // Diagnostic: log what we're matching against
+  for (const f of matchableFlows) {
+    const trig = f.definition.nodes.find((n) => n.data.type === "trigger");
+    const tt = trig?.data.type === "trigger" ? trig.data.triggerType : "none";
+    const kw = trig?.data.type === "trigger" ? trig.data.keywords : undefined;
+    console.log(`[webhook:flow] Candidate flow=${f.id} triggerType=${tt} keywords=${JSON.stringify(kw ?? [])} eventType=${matchableEvent.eventType}`);
+  }
+
   const matchResults = matchFlows(
     matchableEvent,
     matchableFlows.map((f) => ({ id: f.id, definition: f.definition })),
   );
 
   if (matchResults.length === 0) {
-    console.log(`[webhook:flow] No matching flows for text="${matchableEvent.text?.slice(0, 40) ?? ""}" workspace=${ctx.workspaceId}`);
+    console.log(`[webhook:flow] No matching flows for eventType="${matchableEvent.eventType}" text="${matchableEvent.text?.slice(0, 40) ?? ""}" workspace=${ctx.workspaceId}`);
     return;
   }
 
-  console.log(`[webhook:flow] Matched ${matchResults.length} flow(s) for text="${matchableEvent.text?.slice(0, 40) ?? ""}"`);
+  console.log(`[webhook:flow] Matched ${matchResults.length} flow(s) for eventType="${matchableEvent.eventType}" text="${matchableEvent.text?.slice(0, 40) ?? ""}"`);
 
   // 3. Filter by cooldown, then pick the best match per trigger type
   const runnableMatches: typeof matchResults = [];
