@@ -1,6 +1,7 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -47,8 +48,16 @@ export function DashboardShell({
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden md:flex-row">
       <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:hidden">
-        <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
-          IgInbox
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <Image
+            src="/favicon-192.png"
+            alt="IgInbox"
+            width={28}
+            height={28}
+            className="rounded-md"
+            priority
+          />
+          <span className="text-lg font-semibold tracking-tight">IgInbox</span>
         </Link>
         <button
           type="button"
@@ -110,8 +119,16 @@ export function DashboardShell({
 
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border/60 bg-muted/30 md:flex">
         <div className="flex h-14 items-center border-b border-border/60 px-4">
-          <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
-            IgInbox
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <Image
+              src="/favicon-192.png"
+              alt="IgInbox"
+              width={28}
+              height={28}
+              className="rounded-md"
+              priority
+            />
+            <span className="text-lg font-semibold tracking-tight">IgInbox</span>
           </Link>
         </div>
 

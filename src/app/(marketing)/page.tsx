@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
@@ -100,12 +101,15 @@ const structuredData = [
 
 function BrandMark({ small = false }: { small?: boolean }) {
   return (
-    <span
+    <Image
+      src="/favicon-192.png"
+      alt=""
+      width={small ? 32 : 36}
+      height={small ? 32 : 36}
+      className={`shrink-0 ${small ? "rounded-lg" : "rounded-xl"}`}
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-400 via-pink-500 to-orange-400 text-white shadow-[0_4px_24px_rgba(236,72,153,.24)] ${small ? "size-8 rounded-lg" : "size-9"}`}
-    >
-      <Instagram className={small ? "size-4" : "size-[18px]"} strokeWidth={2.2} />
-    </span>
+      priority
+    />
   );
 }
 
