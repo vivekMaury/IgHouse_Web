@@ -1,9 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { subscribeInstagramWebhooks } from "./instagram";
+import {
+  getInstagramAuthUrl,
+  getInstagramRedirectUri,
+  subscribeInstagramWebhooks,
+} from "./instagram";
+
+describe("Instagram OAuth redirect URI", () => {
+  it("uses the configured canonical URI and rejects missing configuration", () => {
+    const redirectUri = "https://iginbox.com/api/instagram/callback";
+
+    expect(getInstagramRedirectUri(redirectUri)).toBe(redirectUri);
+    expect(() => getInstagramRedirectUri("")).toThrow(
+      "INSTAGRAM_REDIRECT_URI must be configured",
+    );
+  });
+
+  it("includes the exact redirect URI in the authorization URL", () => {
+    vi.stubEnv("INSTAGRAM_APP_ID", "test-app-id");
+    const redirectUri = "https://iginbox.com/api/instagram/callback";
+    const authUrl = new URL(getInstagramAuthUrl(redirectUri, "oauth-state"));
+
+    expect(authUrl.searchParams.get("redirect_uri")).toBe(redirectUri);
+    expect(authUrl.searchParams.get("state")).toBe("oauth-state");
+  });
+});
 
 describe("subscribeInstagramWebhooks", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("subscribes the Instagram account to message and postback webhooks", async () => {

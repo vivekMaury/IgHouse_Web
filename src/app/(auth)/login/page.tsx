@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/browser";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { getRedirectPathFromSearch } from "@/lib/auth/redirect";
 import {
   Loader2,
   Eye,
@@ -20,7 +20,6 @@ import {
 type View = "login" | "forgot" | "forgot-sent";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,8 +53,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      window.location.assign(getRedirectPathFromSearch(window.location.search));
     } catch (err) {
       setError((err as Error).message ?? "Something went wrong");
       setLoading(false);
@@ -90,9 +88,12 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     const supabase = createClient();
+    const next = getRedirectPathFromSearch(window.location.search);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
+      },
     });
   }
 

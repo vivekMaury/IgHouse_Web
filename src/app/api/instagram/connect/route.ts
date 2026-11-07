@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getInstagramAuthUrl } from "@/lib/meta/instagram";
+import {
+  getInstagramAuthUrl,
+  getInstagramRedirectUri,
+} from "@/lib/meta/instagram";
 import { randomBytes } from "node:crypto";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -24,7 +27,9 @@ export async function GET(request: Request) {
 
     if (!user) {
       const { origin } = new URL(request.url);
-      return NextResponse.redirect(`${origin}/login`);
+      return NextResponse.redirect(
+        `${origin}/login?next=${encodeURIComponent("/api/instagram/connect")}`,
+      );
     }
 
     const { data: members } = await supabase
@@ -52,8 +57,7 @@ export async function GET(request: Request) {
 
     const state = randomBytes(32).toString("hex");
 
-    const { origin } = new URL(request.url);
-    const redirectUri = `${origin}/api/instagram/callback`;
+    const redirectUri = getInstagramRedirectUri();
 
     const cookieValue = JSON.stringify({
       state,

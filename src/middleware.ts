@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 
 export const runtime = "nodejs";
 
@@ -84,13 +85,19 @@ export async function middleware(request: NextRequest) {
     if (!user && !isPublic) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
+      url.search = "";
+      url.searchParams.set(
+        "next",
+        sanitizeRedirectPath(`${path}${request.nextUrl.search}`),
+      );
       return NextResponse.redirect(url);
     }
 
     if (user && (path === "/login" || path === "/signup")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
+      const destination = sanitizeRedirectPath(
+        request.nextUrl.searchParams.get("next"),
+      );
+      return NextResponse.redirect(new URL(destination, request.url));
     }
   } catch {
     if (!isPublic) {

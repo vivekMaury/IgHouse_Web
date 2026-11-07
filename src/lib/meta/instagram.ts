@@ -11,6 +11,17 @@ const SCOPES = [
   "instagram_business_manage_comments",
 ];
 
+export function getInstagramRedirectUri(
+  redirectUri = env.INSTAGRAM_REDIRECT_URI,
+): string {
+  if (!redirectUri) {
+    throw new Error(
+      "INSTAGRAM_REDIRECT_URI must be configured and match the Meta app OAuth redirect URI.",
+    );
+  }
+  return redirectUri;
+}
+
 export function getInstagramAuthUrl(redirectUri: string, state: string): string {
   const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const params = new URLSearchParams({

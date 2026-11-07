@@ -18,6 +18,16 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Instagram OAuth
+
+Set `INSTAGRAM_REDIRECT_URI` in the deployment environment to the exact callback URL configured in Meta's Valid OAuth Redirect URIs, for example:
+
+```text
+INSTAGRAM_REDIRECT_URI=https://iginbox.com/api/instagram/callback
+```
+
+The value must match exactly, including scheme, hostname, and path. Add a separate matching callback URL for local development if needed.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More

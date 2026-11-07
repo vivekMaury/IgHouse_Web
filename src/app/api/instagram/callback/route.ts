@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
+  getInstagramRedirectUri,
   getInstagramProfile,
   subscribeInstagramWebhooks,
 } from "@/lib/meta/instagram";
@@ -95,7 +96,7 @@ export async function GET(request: Request) {
   let shortToken: string;
   let igUserId: string;
   try {
-    const redirectUri = `${origin}/api/instagram/callback`;
+    const redirectUri = getInstagramRedirectUri();
     const result = await exchangeCodeForToken(code, redirectUri);
     shortToken = result.access_token;
     igUserId = result.user_id;

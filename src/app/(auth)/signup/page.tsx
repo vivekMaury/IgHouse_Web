@@ -2,13 +2,12 @@
 
 import { createClient } from "@/lib/supabase/browser";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Loader2, Eye, EyeOff, AtSign, Lock, ArrowRight, LifeBuoy, Mail } from "lucide-react";
+import { getRedirectPathFromSearch } from "@/lib/auth/redirect";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,10 +28,13 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient();
+      const next = getRedirectPathFromSearch(window.location.search);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
+        },
       });
 
       if (error) {
@@ -43,8 +45,7 @@ export default function SignupPage() {
       }
 
       if (data.session) {
-        router.push("/dashboard");
-        router.refresh();
+        window.location.assign(next);
         return;
       }
 
@@ -54,8 +55,7 @@ export default function SignupPage() {
           password,
         });
         if (!loginError) {
-          router.push("/dashboard");
-          router.refresh();
+          window.location.assign(next);
           return;
         }
       }
@@ -71,9 +71,12 @@ export default function SignupPage() {
 
   async function handleGoogleLogin() {
     const supabase = createClient();
+    const next = getRedirectPathFromSearch(window.location.search);
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
+      },
     });
   }
 

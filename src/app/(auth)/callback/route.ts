@@ -1,22 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-function sanitizeRedirectPath(path: string): string {
-  if (
-    !path.startsWith("/") ||
-    path.startsWith("//") ||
-    path.includes("@") ||
-    path.includes("\\")
-  ) {
-    return "/dashboard";
-  }
-  return path;
-}
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = sanitizeRedirectPath(searchParams.get("next") ?? "/dashboard");
+  const next = sanitizeRedirectPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
