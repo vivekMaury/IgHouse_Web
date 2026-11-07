@@ -209,6 +209,222 @@ SEO applies to the public marketing site. The dashboard must stay private.
 •	Google Search Console and Bing Webmaster Tools verified on day one.
 •	Privacy-friendly analytics (Plausible or PostHog) plus signup funnel events.
 •	Monthly review of top queries, pages losing clicks, and Core Web Vitals report.
+
+### 8.4 SEO & GEO (Generative Engine Optimization) Architecture
+
+This section defines the full five-phase rollout of marketing pages, structured data, and LLM crawler optimization. Every page listed below lives under the `(marketing)` route group, is server-rendered or statically generated, and must score ≥ 90 on Lighthouse Performance.
+
+---
+
+#### Phase 1 — Core Marketing Pages (P0)
+
+These ship with MVP. They are the primary organic and paid landing surfaces.
+
+| Route | Purpose | Primary Keywords |
+|---|---|---|
+| `/` | Homepage — hero, social proof, feature grid, CTA | instagram dm automation, instagram comment automation tool |
+| `/features` | Feature overview hub linking to sub-pages | instagram chatbot features, auto reply instagram comments |
+| `/features/flow-builder` | Visual flow builder deep-dive | instagram automation builder, visual chatbot builder |
+| `/features/inbox` | Shared inbox & human takeover | instagram shared inbox, team inbox for instagram |
+| `/features/contacts` | CRM, tags, lead capture | instagram lead capture, instagram crm |
+| `/features/analytics` | Analytics & reporting | instagram automation analytics |
+| `/pricing` | Plans, comparison table, FAQ accordion | iginbox pricing, instagram automation pricing |
+
+**Page requirements:**
+- Each page has a unique `<title>` (≤ 60 chars), `meta description` (≤ 155 chars), canonical URL, OG image (generated via `next/og`), and Twitter card.
+- FAQ sections on `/pricing` and each `/features/*` page emit `FAQPage` JSON-LD.
+- `/pricing` includes `SoftwareApplication` + `Offer` JSON-LD with each plan's price.
+- Homepage includes `Organization` JSON-LD with logo, sameAs social links, and `contactPoint`.
+
+---
+
+#### Phase 2 — GEO & Competitor Alternative Pages (P0–P1)
+
+These pages target users actively searching for competitor alternatives and comparison queries. They are high-intent pages critical for both traditional SEO and AI-generated answers (GEO).
+
+**Alternative pages** (`/alternatives/{competitor}`):
+
+| Route | Target query cluster |
+|---|---|
+| `/alternatives/manychat` | manychat alternative, manychat alternative for instagram |
+| `/alternatives/chatfuel` | chatfuel alternative, chatfuel vs iginbox |
+| `/alternatives/mobilemonkey` | mobilemonkey alternative instagram |
+| `/alternatives/igdm-pro` | igdm pro alternative |
+| `/alternatives/meta-business-suite` | meta business suite automation alternative |
+
+**Comparison pages** (`/compare/{slug}`):
+
+| Route | Target query cluster |
+|---|---|
+| `/compare/iginbox-vs-manychat` | iginbox vs manychat, manychat vs iginbox |
+| `/compare/iginbox-vs-chatfuel` | iginbox vs chatfuel |
+| `/compare/iginbox-vs-mobilemonkey` | iginbox vs mobilemonkey |
+
+**Content rules for alternative & comparison pages:**
+- Every claim must cite a real differentiator (feature, price, policy). No generic filler.
+- Include a structured comparison table with checkmarks/crosses per feature.
+- Each page includes a "Why teams switch" section with specific pain points.
+- FAQ section with 4–6 questions (emits `FAQPage` JSON-LD).
+- CTA with a free trial or demo link and competitor-specific migration message.
+
+**GEO optimizations (apply to all alternative/compare pages):**
+- Write in clear, factual, citation-friendly prose that LLMs can excerpt verbatim.
+- Lead with a one-sentence direct answer to the comparison query (position zero format).
+- Use structured headings that match common question patterns (`## Is IgInbox better than ManyChat for Instagram DMs?`).
+- Include a `<table>` comparison grid — LLMs frequently pull from HTML tables.
+- Add `speakable` JSON-LD on the summary paragraph so voice assistants can cite it.
+
+---
+
+#### Phase 3 — Use Case & Audience Solutions Pages (P1)
+
+These pages map personas (Section 3) to landing pages optimized for how-to and intent-based queries.
+
+| Route | Persona | Primary Keywords |
+|---|---|---|
+| `/solutions/creators` | Creator / Influencer | instagram automation for creators, auto dm for influencers |
+| `/solutions/ecommerce` | E-commerce brand | instagram automation for ecommerce, instagram chatbot for shopify |
+| `/solutions/agencies` | SMMA / Agency | instagram automation for agencies, white label instagram chatbot |
+| `/solutions/coaches` | Coach / Consultant | instagram lead generation for coaches, instagram dm automation for coaching |
+| `/solutions/real-estate` | Real estate agents | instagram automation for realtors, real estate instagram chatbot |
+
+**Page template:**
+1. Hero with persona-specific headline and screenshot/mockup.
+2. "How it works" — 3-step flow tied to the persona's use case.
+3. Feature highlights (3–4) relevant to this persona, with flow builder screenshots.
+4. Social proof — testimonial or case study from this vertical (placeholder until real ones exist).
+5. FAQ accordion (4–6 Qs, emits `FAQPage` JSON-LD).
+6. CTA: "Start free — built for {persona}."
+
+**GEO for solutions pages:**
+- Open with a direct answer paragraph: "IgInbox helps {persona} automate {workflow} on Instagram by…"
+- Use schema.org `HowTo` JSON-LD for the "How it works" steps.
+- Include stats or benchmarks where available ("Reply in under 5 seconds" from NFRs).
+
+---
+
+#### Phase 4 — Resource & Educational Hub (P1–P2)
+
+Educational content builds topical authority and captures informational queries that feed the conversion funnel.
+
+**Blog / Guides** (`/guides/{slug}`):
+
+| Content cluster | Example articles |
+|---|---|
+| Instagram automation 101 | "How to Auto-Reply to Instagram Comments in 2027", "Instagram DM Automation: The Complete Guide" |
+| Meta policy & compliance | "Instagram Messaging API Rules Explained", "How to Pass Meta App Review" |
+| Growth tactics | "5 Comment-to-DM Funnels That Convert", "Instagram Lead Magnet Ideas for Coaches" |
+| Templates & tutorials | "How to Build a Giveaway Flow in 5 Minutes", "Instagram Welcome DM Setup Guide" |
+| Product updates | Changelog entries expanded into guides when they add user value |
+
+**Content requirements:**
+- Every guide has a unique title, meta description, OG image, and `Article` JSON-LD with `author`, `datePublished`, `dateModified`.
+- Internal linking: every guide links to at least one product page and one related guide.
+- Each guide includes a contextual CTA (e.g., "Try this flow template free →").
+- `BreadcrumbList` JSON-LD on every guide (`Home > Guides > {title}`).
+- Estimated reading time in meta and visible on page.
+
+**Free tools** (link bait, P2):
+
+| Route | Tool |
+|---|---|
+| `/tools/caption-generator` | AI Instagram caption generator |
+| `/tools/keyword-tester` | Test which keyword triggers fire on a sample comment |
+| `/tools/dm-template-library` | Browse and copy DM message templates |
+
+Free tools include `WebApplication` JSON-LD with `applicationCategory: "Utility"` and `offers: { price: "0" }`.
+
+---
+
+#### Phase 5 — Trust & Compliance Legal Pages (P0)
+
+These pages are required for Meta App Review, user trust, and legal compliance. They ship with MVP.
+
+| Route | Purpose | Required by |
+|---|---|---|
+| `/privacy` | Privacy Policy — GDPR, DPDP Act (India), CCPA | Meta App Review, law |
+| `/terms` | Terms of Service | Meta App Review, law |
+| `/data-deletion` | Data deletion instructions + callback endpoint | Meta App Review |
+| `/dpa` | Data Processing Agreement (for agency/enterprise) | GDPR (P1) |
+| `/cookie-policy` | Cookie disclosure | ePrivacy / GDPR |
+| `/security` | Security practices overview (public-facing) | Trust signal (P1) |
+
+**Requirements:**
+- All legal pages are server-rendered with `noindex` only if duplicated elsewhere; otherwise index them — legal pages build trust signals for search and LLMs.
+- `/data-deletion` doubles as the Meta Data Deletion Request callback URL. It must accept POST requests from Meta and return a confirmation URL + code per Meta's spec.
+- Legal pages include `WebPage` JSON-LD with `lastReviewed` date.
+- Plain-language summaries at the top of `/privacy` and `/terms` (expandable "full legal text" below).
+- Version history / "Last updated" date visible on every legal page.
+
+---
+
+### 8.5 JSON-LD Structured Data Schema Plan
+
+All JSON-LD is injected via Next.js Metadata API `generateMetadata()` or a shared `<JsonLd />` component. Every schema is validated against Google's Rich Results Test before launch.
+
+| Schema Type | Pages | Key Properties |
+|---|---|---|
+| `Organization` | `/` (homepage) | `name`, `url`, `logo`, `sameAs` (social links), `contactPoint`, `foundingDate` |
+| `SoftwareApplication` | `/`, `/pricing` | `name`, `applicationCategory: "BusinessApplication"`, `operatingSystem: "Web"`, `offers` (per plan with `price`, `priceCurrency`, `billingPeriod`) |
+| `FAQPage` | `/pricing`, `/features/*`, `/alternatives/*`, `/compare/*`, `/solutions/*` | `mainEntity` array of `Question` + `acceptedAnswer` pairs |
+| `HowTo` | `/solutions/*`, select `/guides/*` | `name`, `step[]` with `text` and optional `image` |
+| `Article` | `/guides/*` | `headline`, `author`, `datePublished`, `dateModified`, `image`, `publisher` |
+| `BreadcrumbList` | All marketing pages | `itemListElement` with `position`, `name`, `item` URL |
+| `WebApplication` | `/tools/*` | `name`, `applicationCategory: "Utility"`, `offers: { price: "0" }` |
+| `WebPage` | `/privacy`, `/terms`, `/data-deletion`, `/security` | `name`, `lastReviewed`, `about` |
+| `speakable` | `/alternatives/*`, `/compare/*` summary paragraphs | `cssSelector` pointing to the lead summary `<p>` |
+
+**Implementation:**
+```typescript
+// src/components/seo/json-ld.tsx
+// Shared component — pass schema type + props, renders <script type="application/ld+json">
+// Validates at dev time with a Zod schema matching schema.org spec subset
+```
+
+---
+
+### 8.6 LLM Crawler Optimization (GEO Technical Layer)
+
+Generative Engine Optimization ensures IgInbox appears in AI-generated answers (ChatGPT, Perplexity, Google AI Overviews, etc.) when users ask about Instagram automation tools.
+
+**Crawl access:**
+- `robots.txt` allows known LLM crawlers: `GPTBot`, `Google-Extended`, `anthropic-ai`, `PerplexityBot`, `ClaudeBot`, `Applebot-Extended`, `cohere-ai`. Block only authenticated routes (`/dashboard/*`, `/api/*`, `/auth/*`).
+- Serve a clean, JS-minimal HTML payload for marketing pages — SSR/SSG ensures content is in the initial HTML, not hydrated client-side.
+- Add a `<meta name="robots" content="max-snippet:-1, max-image-preview:large, max-video-preview:-1">` to marketing pages to allow full-length snippets.
+
+**Content structure for LLM extraction:**
+- Every marketing page opens with a 1–2 sentence direct-answer paragraph that can be quoted verbatim by an LLM.
+- Use semantic HTML: `<article>`, `<section>`, `<h1>`–`<h3>` hierarchy, `<table>` for comparisons, `<dl>` for feature definitions.
+- Comparison tables use `<thead>` / `<tbody>` with clear column headers — LLMs parse HTML tables better than CSS grid layouts.
+- FAQ sections use `<details>` / `<summary>` with matching `FAQPage` JSON-LD.
+- Stat claims include inline citations or "Source:" annotations (e.g., "Reply in under 5 seconds — see our [architecture docs](/security)").
+
+**Topical authority signals:**
+- Comprehensive internal linking: every page links to 2+ related pages within the site.
+- Consistent entity naming: always "IgInbox" (not "Ig Inbox", "igInbox", or "IGINBOX") across all pages, meta tags, and structured data.
+- Author/brand entity: `Organization` JSON-LD on homepage, `publisher` on every `Article`, consistent `sameAs` links to social profiles.
+- Freshness signals: `dateModified` on articles, "Last updated" on legal pages, a public `/changelog` page.
+
+**llms.txt (optional, emerging standard):**
+- Serve `/llms.txt` with a concise, machine-readable summary of what IgInbox is, its key features, pricing tiers, and links to authoritative pages. Format:
+```
+# IgInbox
+> Instagram DM & Comment Automation Platform
+
+## Key Pages
+- [Homepage](https://iginbox.com)
+- [Pricing](https://iginbox.com/pricing)
+- [Features](https://iginbox.com/features)
+- [Documentation](https://iginbox.com/guides)
+
+## What is IgInbox?
+IgInbox automates Instagram comment-to-DM funnels, manages a shared team inbox, and captures leads — built on official Meta APIs with a visual flow builder.
+```
+
+**Monitoring:**
+- Track LLM crawler traffic in server logs (filter by user-agent).
+- Monthly audit: search "best instagram automation tool" and similar queries in ChatGPT, Perplexity, and Google AI Overview to check if IgInbox appears.
+- If IgInbox is not cited, review whether the relevant page has a clear direct-answer paragraph and proper structured data.
 9. Meta Compliance and App Review
 •	Use only official Meta APIs. Never automate with unofficial methods.
 •	Respect the 24-hour messaging window and the one-private-reply-per-comment rule; verify current limits in Meta's documentation before launch.
