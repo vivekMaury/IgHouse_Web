@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
+import { BrandLogo } from "@/components/logo";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -174,19 +174,8 @@ function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 pt-3 sm:px-6">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between rounded-2xl border border-white/[0.09] bg-[#101014]/80 px-4 shadow-[0_8px_40px_rgba(0,0,0,.2)] backdrop-blur-xl sm:px-5">
-        <Link href="/" aria-label="IgInbox home" className="flex items-center gap-2.5">
-          <Image
-            src="/favicon-192.png"
-            alt=""
-            width={32}
-            height={32}
-            className="rounded-lg"
-            aria-hidden="true"
-            priority
-          />
-          <span className="text-[15px] font-semibold tracking-tight text-white">
-            Ig<span className="text-pink-400">Inbox</span>
-          </span>
+        <Link href="/" aria-label="IgInbox home" className="flex items-center">
+          <BrandLogo size="default" />
         </Link>
         <div className="flex items-center gap-2">
           <Link
@@ -618,18 +607,8 @@ export default function ManychatAlternativePage() {
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
             <div>
-              <Link href="/" className="flex items-center gap-2.5">
-                <Image
-                  src="/favicon-192.png"
-                  alt=""
-                  width={32}
-                  height={32}
-                  className="rounded-lg"
-                  aria-hidden="true"
-                />
-                <span className="text-sm font-semibold text-white">
-                  Ig<span className="text-pink-400">Inbox</span>
-                </span>
+              <Link href="/" className="flex items-center">
+                <BrandLogo size="sm" />
               </Link>
               <p className="mt-3 max-w-xs text-xs leading-5 text-zinc-600">
                 The Instagram automation platform built for creators, brands,
@@ -655,7 +634,7 @@ export default function ManychatAlternativePage() {
             </div>
           </div>
           <div className="mt-8 flex flex-col gap-2 border-t border-white/[0.05] pt-5 text-[10px] text-zinc-700 sm:flex-row sm:justify-between">
-            <span>&copy; {new Date().getFullYear()} IgInbox. All rights reserved.</span>
+            <span>&copy; {2026} IgInbox. All rights reserved.</span>
             <span>
               IgInbox is not affiliated with or endorsed by Meta Platforms, Inc.
               or ManyChat.
