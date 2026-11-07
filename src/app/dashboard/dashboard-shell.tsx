@@ -4,8 +4,15 @@ import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { BrandLogo } from "@/components/logo";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   LayoutDashboard,
   GitBranch,
@@ -15,7 +22,7 @@ import {
   LogOut,
   Activity,
   Menu,
-  X,
+  ChevronRight,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -38,129 +45,142 @@ export function DashboardShell({
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  async function handleSignOut() {
+  const handleSignOut = useCallback(async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
-  }
+  }, [router]);
+
+  const isActive = useCallback(
+    (href: string) =>
+      href === "/dashboard"
+        ? pathname === "/dashboard"
+        : pathname.startsWith(href),
+    [pathname],
+  );
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden md:flex-row">
-      <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:hidden">
+      {/* ── Mobile Header ── */}
+      <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:hidden">
         <Link href="/dashboard" className="flex items-center">
           <BrandLogo size="default" variant="auto" />
         </Link>
-        <button
-          type="button"
-          onClick={() => setMobileNavOpen((open) => !open)}
-          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-          aria-expanded={mobileNavOpen}
-          aria-controls="mobile-dashboard-navigation"
-          className="inline-flex size-10 items-center justify-center rounded-lg border border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          {mobileNavOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
-        <div
-          id="mobile-dashboard-navigation"
-          hidden={!mobileNavOpen}
-          className="absolute inset-x-2 top-[calc(100%+0.5rem)] rounded-xl border border-border/60 bg-background p-2 shadow-xl"
-        >
-            <nav aria-label="Dashboard navigation" className="space-y-1">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                const isActive =
-                  href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : pathname.startsWith(href);
 
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMobileNavOpen(false)}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
-                    }`}
-                  >
-                    <Icon className="size-4" />
-                    {label}
-                  </Link>
-                );
-              })}
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetTrigger
+            className="inline-flex size-10 items-center justify-center rounded-xl border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Open navigation"
+          >
+            <Menu className="size-5" />
+          </SheetTrigger>
+          <SheetContent side="left" showCloseButton>
+            <SheetHeader>
+              <SheetTitle>
+                <BrandLogo size="default" variant="auto" />
+              </SheetTitle>
+            </SheetHeader>
+
+            <nav className="flex-1 space-y-1 px-2" aria-label="Dashboard navigation">
+              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileNavOpen(false)}
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ${
+                    isActive(href)
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="size-[18px]" />
+                  <span className="flex-1">{label}</span>
+                  {isActive(href) && (
+                    <ChevronRight className="size-3.5 text-primary/60" />
+                  )}
+                </Link>
+              ))}
             </nav>
-            <div className="mt-2 flex items-center gap-2 border-t border-border/60 px-3 pt-3">
-              <div className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                {user.email?.charAt(0).toUpperCase()}
+
+            <div className="mt-auto border-t border-border/60 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-full bg-gradient-brand text-xs font-semibold text-white">
+                  {user.email?.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {user.email}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="size-4" />
+                </button>
               </div>
-              <span className="flex-1 truncate text-sm text-muted-foreground">
-                {user.email}
-              </span>
-              <button
-                onClick={handleSignOut}
-                className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut className="size-4" />
-              </button>
             </div>
-        </div>
+          </SheetContent>
+        </Sheet>
       </header>
 
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border/60 bg-muted/30 md:flex">
-        <div className="flex h-14 items-center border-b border-border/60 px-4">
+      {/* ── Desktop Sidebar ── */}
+      <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border/60 bg-sidebar md:flex">
+        {/* Logo */}
+        <div className="flex h-14 items-center border-b border-border/60 px-5">
           <Link href="/dashboard" className="flex items-center">
             <BrandLogo size="default" variant="auto" />
           </Link>
         </div>
 
-        <nav className="flex-1 space-y-1 p-2">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(href);
-
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </Link>
-            );
-          })}
+        {/* Nav */}
+        <nav className="flex-1 space-y-0.5 p-2.5" aria-label="Dashboard navigation">
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 ${
+                isActive(href)
+                  ? "bg-primary/10 text-primary shadow-sm"
+                  : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+              }`}
+            >
+              {isActive(href) && (
+                <span className="absolute -left-[11px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-primary" />
+              )}
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </Link>
+          ))}
         </nav>
 
-        <div className="border-t border-border/60 p-2">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+        {/* User Section */}
+        <div className="border-t border-border/60 p-2.5">
+          <div className="flex items-center gap-2.5 rounded-lg px-3 py-2">
+            <div className="flex size-7 items-center justify-center rounded-full bg-gradient-brand text-[10px] font-semibold text-white">
               {user.email?.charAt(0).toUpperCase()}
             </div>
-            <span className="flex-1 truncate text-sm text-muted-foreground">
+            <span className="flex-1 truncate text-xs text-muted-foreground">
               {user.email}
             </span>
             <button
               onClick={handleSignOut}
-              className="text-muted-foreground hover:text-foreground"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
               title="Sign out"
+              aria-label="Sign out"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="size-3.5" />
             </button>
           </div>
         </div>
       </aside>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto">
-        <div className="p-3 sm:p-4 md:p-6">{children}</div>
+      {/* ── Main Content ── */}
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto bg-background">
+        <div className="p-4 sm:p-5 md:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );
