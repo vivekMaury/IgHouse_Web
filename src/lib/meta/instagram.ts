@@ -1,8 +1,9 @@
 import { env } from "@/lib/env";
 
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
-const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
-const GRAPH_API_BASE = "https://graph.instagram.com";
+const GRAPH_FB_BASE = "https://graph.facebook.com";
+const GRAPH_FB_VERSION = "v18.0";
+const GRAPH_IG_BASE = "https://graph.instagram.com";
 const GRAPH_API_VERSION = "v21.0";
 
 const SCOPES = [
@@ -42,6 +43,19 @@ export async function exchangeCodeForToken(
 ): Promise<{ access_token: string; user_id: string }> {
   const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const appSecret = process.env.META_APP_SECRET ?? env.META_APP_SECRET;
+
+  if (!igAppId) {
+    throw new Error(
+      "INSTAGRAM_APP_ID is missing. Set it in Vercel environment variables (Settings → Environment Variables).",
+    );
+  }
+  if (!appSecret) {
+    throw new Error(
+      "META_APP_SECRET is missing. Set it in Vercel environment variables (Settings → Environment Variables).",
+    );
+  }
+
+  const tokenUrl = `${GRAPH_FB_BASE}/${GRAPH_FB_VERSION}/oauth/access_token`;
   const body = new URLSearchParams({
     client_id: igAppId,
     client_secret: appSecret,
@@ -50,23 +64,31 @@ export async function exchangeCodeForToken(
     code,
   });
 
-  const res = await fetch(INSTAGRAM_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
+  console.log("[ig-token-exchange] POST", tokenUrl, "redirect_uri:", redirectUri);
+
+  let res: Response;
+  try {
+    res = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+  } catch (fetchErr) {
+    console.error("[ig-token-exchange] Network error:", fetchErr);
+    throw new Error(`Instagram token exchange network error: ${(fetchErr as Error).message}`);
+  }
 
   const text = await res.text();
 
   if (!res.ok) {
-    throw new Error(`Instagram token exchange failed: ${res.status} ${text}`);
+    console.error("Meta Token Exchange Error:", text);
+    throw new Error(`Instagram token exchange failed (HTTP ${res.status}): ${text}`);
   }
 
+  const data = JSON.parse(text) as { access_token: string; user_id?: number };
   // Parse user_id from raw text to avoid JavaScript number precision loss.
-  // Instagram user IDs are 17-18 digits, exceeding Number.MAX_SAFE_INTEGER.
   const userIdMatch = text.match(/"user_id"\s*:\s*(\d+)/);
-  const data = JSON.parse(text) as { access_token: string };
-  const userId = userIdMatch?.[1] ?? String((JSON.parse(text) as { user_id: number }).user_id);
+  const userId = userIdMatch?.[1] ?? String(data.user_id ?? "");
 
   return { access_token: data.access_token, user_id: userId };
 }
@@ -74,21 +96,33 @@ export async function exchangeCodeForToken(
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<{ access_token: string; expires_in: number }> {
+  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const appSecret = process.env.META_APP_SECRET ?? env.META_APP_SECRET;
   const params = new URLSearchParams({
-    grant_type: "ig_exchange_token",
+    grant_type: "fb_exchange_token",
+    client_id: igAppId,
     client_secret: appSecret,
-    access_token: shortLivedToken,
+    fb_exchange_token: shortLivedToken,
   });
 
-  const res = await fetch(`${GRAPH_API_BASE}/access_token?${params.toString()}`);
+  const tokenUrl = `${GRAPH_FB_BASE}/${GRAPH_FB_VERSION}/oauth/access_token?${params.toString()}`;
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Long-lived token exchange failed: ${res.status} ${text}`);
+  let res: Response;
+  try {
+    res = await fetch(tokenUrl);
+  } catch (fetchErr) {
+    console.error("[ig-long-token] Network error:", fetchErr);
+    throw new Error(`Long-lived token exchange network error: ${(fetchErr as Error).message}`);
   }
 
-  return (await res.json()) as { access_token: string; expires_in: number };
+  const text = await res.text();
+
+  if (!res.ok) {
+    console.error("Meta Long-Lived Token Exchange Error:", text);
+    throw new Error(`Long-lived token exchange failed (HTTP ${res.status}): ${text}`);
+  }
+
+  return JSON.parse(text) as { access_token: string; expires_in: number };
 }
 
 export async function refreshLongLivedToken(
@@ -99,7 +133,7 @@ export async function refreshLongLivedToken(
     access_token: token,
   });
 
-  const res = await fetch(`${GRAPH_API_BASE}/refresh_access_token?${params.toString()}`);
+  const res = await fetch(`${GRAPH_IG_BASE}/refresh_access_token?${params.toString()}`);
 
   if (!res.ok) {
     const text = await res.text();
@@ -116,7 +150,7 @@ export async function subscribeInstagramWebhooks(
   const fields = ["messages", "messaging_postbacks"];
   const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
   const res = await fetch(
-    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
+    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -148,7 +182,7 @@ export async function fetchIgUserProfile(
   });
 
   const res = await fetch(
-    `${GRAPH_API_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(userId)}?${params}`,
+    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(userId)}?${params}`,
   );
 
   if (!res.ok) {
@@ -167,7 +201,7 @@ export async function getInstagramProfile(
     access_token: token,
   });
 
-  const res = await fetch(`${GRAPH_API_BASE}/me?${params.toString()}`);
+  const res = await fetch(`${GRAPH_IG_BASE}/me?${params.toString()}`);
 
   if (!res.ok) {
     const text = await res.text();
@@ -199,7 +233,7 @@ export async function checkIsFollower(
   maxPages = 20,
 ): Promise<boolean> {
   let url: string | null =
-    `${GRAPH_API_BASE}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
+    `${GRAPH_IG_BASE}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
 
   for (let page = 0; page < maxPages && url; page++) {
     const res = await fetch(url);
