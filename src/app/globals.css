@@ -227,6 +227,97 @@
   }
 }
 
+/* ─── Auth page animations ──────────────────────────────────────── */
+@keyframes auth-orb-1 {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.22;
+  }
+  50% {
+    transform: translate(-46%, -54%) scale(1.15) translateY(-25px);
+    opacity: 0.32;
+  }
+}
+
+@keyframes auth-orb-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: translate(-25px, -30px) scale(1.22);
+    opacity: 0.28;
+  }
+}
+
+@keyframes auth-orb-3 {
+  0%, 100% {
+    transform: translate(-50%, 0) scale(0.9);
+    opacity: 0.12;
+  }
+  50% {
+    transform: translate(-45%, -20px) scale(1.1);
+    opacity: 0.22;
+  }
+}
+
+@keyframes auth-dot-drift {
+  0%   { background-position: 0px 0px; }
+  100% { background-position: 24px 24px; }
+}
+
+@keyframes auth-badge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 22px rgba(229,25,127,0.35), 0 0 45px rgba(139,49,255,0.18);
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(229,25,127,0.6), 0 0 65px rgba(139,49,255,0.35);
+    transform: translateY(-2px) scale(1.02);
+  }
+}
+
+@keyframes auth-shimmer {
+  0%        { transform: translateX(-150%) skewX(-20deg); }
+  35%, 100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+@keyframes auth-card-in {
+  from { opacity: 0; transform: translateY(28px) scale(0.975); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes auth-item-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@layer utilities {
+  .animate-auth-orb-1     { animation: auth-orb-1 14s ease-in-out infinite alternate; }
+  .animate-auth-orb-2     { animation: auth-orb-2 18s ease-in-out infinite alternate; }
+  .animate-auth-orb-3     { animation: auth-orb-3 16s ease-in-out infinite alternate; }
+  .animate-auth-dot-drift { animation: auth-dot-drift 22s linear infinite; }
+  .animate-auth-badge     { animation: auth-badge-pulse 4.5s ease-in-out infinite; }
+  .animate-auth-shimmer   { animation: auth-shimmer 4.5s cubic-bezier(0.4,0,0.2,1) infinite; }
+  .animate-auth-card      { animation: auth-card-in 0.85s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .animate-auth-item      { animation: auth-item-in 0.65s cubic-bezier(0.16,1,0.3,1) forwards; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-auth-orb-1,
+  .animate-auth-orb-2,
+  .animate-auth-orb-3,
+  .animate-auth-dot-drift,
+  .animate-auth-badge,
+  .animate-auth-shimmer,
+  .animate-auth-card,
+  .animate-auth-item {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* ─── Animations ─────────────────────────────────────────────────── */
 @keyframes fadeSlideUp {
   from {
