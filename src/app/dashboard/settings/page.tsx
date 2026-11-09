@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SettingsTabs } from "./settings-tabs";
+import { ConnectionAlert } from "./connection-alert";
 
 export const instant = false;
 
@@ -64,27 +65,7 @@ export default async function SettingsPage({
         </p>
       </div>
 
-      {connected && (
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">
-          Instagram account connected successfully.
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error === "instagram_auth_denied"
-            ? "Instagram authorization was denied."
-            : error === "token_exchange_failed"
-              ? "Failed to exchange Instagram token. Please try again."
-              : error === "db_save_failed"
-                ? "Failed to save account. Please try again."
-                : error === "webhook_subscription_failed"
-                  ? "Could not enable Instagram message notifications. Check that the Meta app is Live and the messages webhook field is configured, then reconnect the account."
-                : error === "encryption_failed"
-                  ? "Server encryption error. Please contact support."
-                  : `Connection error: ${error}`}
-        </div>
-      )}
+      <ConnectionAlert connected={connected} error={error} />
 
       <SettingsTabs
         defaultTab={tab === "workspace" ? "workspace" : "integrations"}

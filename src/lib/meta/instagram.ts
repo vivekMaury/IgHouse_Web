@@ -184,7 +184,12 @@ export async function fetchIgUserProfile(
 
 export async function getInstagramProfile(
   token: string
-): Promise<{ id: string; username: string; profile_picture_url?: string }> {
+): Promise<{
+  id: string;
+  username: string;
+  account_type?: string;
+  profile_picture_url?: string;
+}> {
   const params = new URLSearchParams({
     fields: "id,user_id,username,account_type,profile_picture_url",
     access_token: token,
@@ -208,8 +213,31 @@ export async function getInstagramProfile(
   return {
     id: data.user_id ?? data.id ?? "",
     username: data.username,
+    account_type: data.account_type,
     profile_picture_url: data.profile_picture_url,
   };
+}
+
+export async function checkFacebookPageLinked(
+  igUserId: string,
+  accessToken: string,
+): Promise<boolean> {
+  const params = new URLSearchParams({
+    fields: "connected_instagram_account",
+    access_token: accessToken,
+  });
+
+  const res = await fetch(
+    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(igUserId)}?${params.toString()}`,
+  );
+
+  if (!res.ok) return true;
+
+  const data = (await res.json()) as {
+    connected_instagram_account?: { id: string };
+  };
+
+  return data.connected_instagram_account != null;
 }
 
 /**

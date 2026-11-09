@@ -8,6 +8,7 @@ import {
   getInstagramRedirectUri,
   getInstagramProfile,
   subscribeInstagramWebhooks,
+  checkFacebookPageLinked,
 } from "@/lib/meta/instagram";
 import { encryptToken } from "@/lib/crypto/token";
 import { inngest } from "@/lib/inngest/client";
@@ -23,7 +24,11 @@ export async function GET(request: Request) {
 
   if (error) {
     console.error("[ig-callback] OAuth denied:", error, errorReason);
-    return NextResponse.redirect(`${settingsUrl}?error=instagram_auth_denied`);
+    const errorCode =
+      errorReason === "user_denied" || error === "access_denied"
+        ? "permissions_denied"
+        : "instagram_auth_denied";
+    return NextResponse.redirect(`${settingsUrl}?error=${errorCode}`);
   }
 
   if (!code || !state) {
@@ -118,8 +123,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${settingsUrl}?error=token_exchange_failed`);
   }
 
-  // Step 4: Get Instagram profile (required — the IGSID from /me is the
-  // canonical ID that webhook entry.id uses, not the app-scoped igUserId)
+  // Step 4: Get Instagram profile and validate account type
   let igBusinessAccountId: string;
   let username = "unknown";
   let avatarUrl: string | null = null;
@@ -128,7 +132,16 @@ export async function GET(request: Request) {
     igBusinessAccountId = profile.id;
     username = profile.username;
     avatarUrl = profile.profile_picture_url ?? null;
-    console.log("[ig-callback] Profile fetched:", username, "igBusinessAccountId:", igBusinessAccountId);
+    console.log("[ig-callback] Profile fetched:", username, "type:", profile.account_type, "id:", igBusinessAccountId);
+
+    if (
+      profile.account_type &&
+      profile.account_type !== "BUSINESS" &&
+      profile.account_type !== "MEDIA_CREATOR"
+    ) {
+      console.error("[ig-callback] Personal account detected:", profile.account_type);
+      return NextResponse.redirect(`${settingsUrl}?error=personal_account`);
+    }
   } catch (err) {
     console.error("[ig-callback] Profile fetch failed:", (err as Error).message);
     return NextResponse.redirect(`${settingsUrl}?error=profile_fetch_failed`);
@@ -137,6 +150,17 @@ export async function GET(request: Request) {
   if (!igBusinessAccountId) {
     console.error("[ig-callback] Could not resolve Instagram Business Account ID from /me endpoint");
     return NextResponse.redirect(`${settingsUrl}?error=missing_ig_business_id`);
+  }
+
+  // Step 4b: Check Facebook Page linkage
+  try {
+    const hasPage = await checkFacebookPageLinked(igBusinessAccountId, longToken);
+    if (!hasPage) {
+      console.error("[ig-callback] No linked Facebook Page for:", username);
+      return NextResponse.redirect(`${settingsUrl}?error=no_facebook_page`);
+    }
+  } catch (err) {
+    console.warn("[ig-callback] Facebook Page check failed (non-blocking):", (err as Error).message);
   }
 
   // Step 5: Encrypt token
