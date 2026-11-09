@@ -352,6 +352,7 @@ export default function SignupPage() {
               {/* Instagram */}
               <button
                 type="button"
+                onClick={() => { window.location.href = "/api/auth/instagram"; }}
                 className="group flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border border-white/[0.09] bg-[#1C1C24] px-4 py-2.5 text-xs font-semibold text-slate-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-pink-500/30 hover:bg-[#23232E] hover:shadow-[0_4px_18px_-2px_rgba(229,25,127,0.22),0_0_12px_rgba(229,25,127,0.15)] active:scale-95"
               >
                 <svg

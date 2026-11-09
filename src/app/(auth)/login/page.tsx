@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/browser";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getRedirectPathFromSearch } from "@/lib/auth/redirect";
@@ -17,15 +18,28 @@ import {
   Mail,
 } from "lucide-react";
 
+const IG_ERROR_MESSAGES: Record<string, string> = {
+  permissions_denied: "You need to allow all requested Instagram permissions. Please try again.",
+  personal_account: "Please switch your Instagram account to a Business or Creator account.",
+  no_facebook_page: "Your Instagram account is not linked to a Facebook Page.",
+  instagram_auth_denied: "Instagram login was cancelled or denied. Please try again.",
+  token_exchange_failed: "Instagram authentication failed. Please ensure you have a Business or Creator account.",
+};
+
 type View = "login" | "forgot" | "forgot-sent";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const urlError = searchParams.get("error");
+  const [error, setError] = useState<string | null>(() => {
+    if (urlError) return IG_ERROR_MESSAGES[urlError] ?? `Login failed: ${urlError}`;
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [shakeField, setShakeField] = useState<string | null>(null);
 
@@ -489,6 +503,7 @@ export default function LoginPage() {
                   {/* Instagram */}
                   <button
                     type="button"
+                    onClick={() => { window.location.href = "/api/auth/instagram"; }}
                     className="group flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border border-white/[0.09] bg-[#1C1C24] px-4 py-2.5 text-xs font-semibold text-slate-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-pink-500/30 hover:bg-[#23232E] hover:shadow-[0_4px_18px_-2px_rgba(229,25,127,0.22),0_0_12px_rgba(229,25,127,0.15)] active:scale-95"
                   >
                     <svg
