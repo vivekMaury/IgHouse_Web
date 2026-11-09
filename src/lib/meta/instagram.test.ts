@@ -15,9 +15,9 @@ beforeAll(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
-  process.env.META_APP_ID = "123456";
+  process.env.META_APP_ID = "987654321";
   process.env.META_APP_SECRET = "test-app-secret";
-  process.env.INSTAGRAM_APP_ID = "test-app-id";
+  process.env.INSTAGRAM_APP_ID = "1748895003007419";
   process.env.INSTAGRAM_CLIENT_SECRET = "test-ig-client-secret";
   process.env.META_WEBHOOK_VERIFY_TOKEN = "test-verify-token";
   process.env.TOKEN_ENCRYPTION_KEY =
@@ -37,6 +37,11 @@ describe("Instagram OAuth redirect URI", () => {
     const redirectUri = "https://iginbox.com/api/instagram/callback";
     const authUrl = new URL(getInstagramAuthUrl(redirectUri, "oauth-state"));
 
+    expect(authUrl.origin + authUrl.pathname).toBe(
+      "https://www.instagram.com/oauth/authorize",
+    );
+    expect(authUrl.searchParams.get("client_id")).toBe("1748895003007419");
+    expect(authUrl.searchParams.get("client_id")).not.toBe("987654321");
     expect(authUrl.searchParams.get("redirect_uri")).toBe(redirectUri);
     expect(authUrl.searchParams.get("state")).toBe("oauth-state");
   });
