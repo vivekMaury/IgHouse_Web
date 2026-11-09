@@ -12,6 +12,7 @@ beforeAll(() => {
   process.env.META_APP_ID = "123456";
   process.env.INSTAGRAM_APP_ID = "789012";
   process.env.INSTAGRAM_CLIENT_SECRET = "test-ig-client-secret";
+  process.env.INSTAGRAM_REDIRECT_URI = "https://test.iginbox.com/api/instagram/callback";
   process.env.TOKEN_ENCRYPTION_KEY =
     "aab1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1";
   resetEnvCache();

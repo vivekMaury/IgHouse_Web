@@ -1,8 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { resetEnvCache } from "@/lib/env";
 import {
+  decodeInstagramOAuthState,
+  encodeInstagramOAuthState,
+  exchangeCodeForToken,
+  exchangeForLongLivedToken,
   getInstagramAuthUrl,
   getInstagramRedirectUri,
+  refreshLongLivedToken,
   subscribeInstagramWebhooks,
 } from "./instagram";
 
@@ -21,13 +26,11 @@ beforeAll(() => {
 });
 
 describe("Instagram OAuth redirect URI", () => {
-  it("uses the configured canonical URI and rejects missing configuration", () => {
-    const redirectUri = "https://iginbox.com/api/instagram/callback";
+  it("returns the configured redirect URI from env", () => {
+    process.env.INSTAGRAM_REDIRECT_URI = "https://iginbox.com/api/instagram/callback";
+    resetEnvCache();
 
-    expect(getInstagramRedirectUri(redirectUri)).toBe(redirectUri);
-    expect(() => getInstagramRedirectUri("")).toThrow(
-      "INSTAGRAM_REDIRECT_URI must be configured",
-    );
+    expect(getInstagramRedirectUri()).toBe("https://iginbox.com/api/instagram/callback");
   });
 
   it("includes the exact redirect URI in the authorization URL", () => {
@@ -36,6 +39,93 @@ describe("Instagram OAuth redirect URI", () => {
 
     expect(authUrl.searchParams.get("redirect_uri")).toBe(redirectUri);
     expect(authUrl.searchParams.get("state")).toBe("oauth-state");
+  });
+});
+
+describe("Instagram Login token exchange", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("exchanges the authorization code through Instagram OAuth and preserves the user ID", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        '{"access_token":"short-token","user_id":12345678901234567}',
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await exchangeCodeForToken(
+      "authorization-code",
+      "https://iginbox.com/api/instagram/callback",
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.instagram.com/oauth/access_token");
+    expect(options.method).toBe("POST");
+    expect(options.body).toBeInstanceOf(FormData);
+    expect((options.body as FormData).get("grant_type")).toBe("authorization_code");
+    expect(result).toEqual({
+      access_token: "short-token",
+      user_id: "12345678901234567",
+    });
+  });
+
+  it("exchanges short-lived tokens using Instagram's 60-day token grant", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({ access_token: "long-token", expires_in: 5_184_000 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(exchangeForLongLivedToken("short-token")).resolves.toEqual({
+      access_token: "long-token",
+      expires_in: 5_184_000,
+    });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const parsedUrl = new URL(url);
+    expect(parsedUrl.origin).toBe("https://graph.instagram.com");
+    expect(parsedUrl.pathname).toBe("/access_token");
+    expect(parsedUrl.searchParams.get("grant_type")).toBe("ig_exchange_token");
+    expect(parsedUrl.searchParams.get("access_token")).toBe("short-token");
+  });
+
+  it("refreshes long-lived tokens using Instagram's refresh endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({ access_token: "refreshed-token", expires_in: 5_184_000 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await refreshLongLivedToken("long-token");
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const parsedUrl = new URL(url);
+    expect(parsedUrl.origin).toBe("https://graph.instagram.com");
+    expect(parsedUrl.pathname).toBe("/refresh_access_token");
+    expect(parsedUrl.searchParams.get("grant_type")).toBe("ig_refresh_token");
+  });
+});
+
+describe("Instagram OAuth state cookie payload", () => {
+  it("encrypts and validates the state payload", () => {
+    const state = {
+      state: "a".repeat(64),
+      purpose: "connect" as const,
+      workspaceId: "123e4567-e89b-12d3-a456-426614174000",
+      userId: "123e4567-e89b-12d3-a456-426614174001",
+    };
+
+    expect(decodeInstagramOAuthState(encodeInstagramOAuthState(state))).toEqual(state);
+  });
+
+  it("rejects a tampered encrypted state payload", () => {
+    const encoded = encodeInstagramOAuthState({ state: "b".repeat(64) });
+    const [iv, ciphertext] = encoded.split(".");
+    const replacement = `${ciphertext?.[0] === "A" ? "B" : "A"}${ciphertext?.slice(1)}`;
+
+    expect(() => decodeInstagramOAuthState(`${iv}.${replacement}`)).toThrow();
   });
 });
 
@@ -55,7 +145,7 @@ describe("subscribeInstagramWebhooks", () => {
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
-      "https://graph.facebook.com/v26.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
+      "https://graph.instagram.com/v26.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
     );
     expect(options.method).toBe("POST");
     expect(new Headers(options.headers).get("Authorization")).toBe(

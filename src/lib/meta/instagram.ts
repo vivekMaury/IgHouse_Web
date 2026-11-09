@@ -1,7 +1,42 @@
 import { env } from "@/lib/env";
+import { decryptToken, encryptToken } from "@/lib/crypto/token";
+import { z } from "zod/v4";
 
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
-const GRAPH_FB = "https://graph.facebook.com/v26.0";
+const INSTAGRAM_OAUTH_BASE = "https://api.instagram.com";
+const INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com";
+const INSTAGRAM_GRAPH_VERSION = "v26.0";
+
+const instagramOAuthStateSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+  purpose: z.enum(["login", "connect"]).optional(),
+  workspaceId: z.uuid().optional(),
+  userId: z.uuid().optional(),
+});
+
+export type InstagramOAuthState = z.infer<typeof instagramOAuthStateSchema>;
+
+export function encodeInstagramOAuthState(state: InstagramOAuthState): string {
+  const validatedState = instagramOAuthStateSchema.parse(state);
+  const { ciphertext, iv } = encryptToken(JSON.stringify(validatedState));
+  return `${iv.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+
+export function decodeInstagramOAuthState(value: string): InstagramOAuthState {
+  const [ivValue, ciphertextValue, extra] = value.split(".");
+  if (!ivValue || !ciphertextValue || extra !== undefined) {
+    throw new Error("Malformed Instagram OAuth state cookie");
+  }
+
+  const iv = Buffer.from(ivValue, "base64url");
+  const ciphertext = Buffer.from(ciphertextValue, "base64url");
+  if (iv.length !== 12 || ciphertext.length <= 16) {
+    throw new Error("Malformed Instagram OAuth state cookie");
+  }
+
+  const payload = JSON.parse(decryptToken(ciphertext, iv)) as unknown;
+  return instagramOAuthStateSchema.parse(payload);
+}
 
 const SCOPES = [
   "instagram_business_basic",
@@ -9,15 +44,8 @@ const SCOPES = [
   "instagram_business_manage_comments",
 ];
 
-export function getInstagramRedirectUri(
-  redirectUri = env.INSTAGRAM_REDIRECT_URI,
-): string {
-  if (!redirectUri) {
-    throw new Error(
-      "INSTAGRAM_REDIRECT_URI must be configured and match the Meta app OAuth redirect URI.",
-    );
-  }
-  return redirectUri;
+export function getInstagramRedirectUri(): string {
+  return env.INSTAGRAM_REDIRECT_URI;
 }
 
 export function getInstagramAuthUrl(redirectUri: string, state: string): string {
@@ -37,14 +65,13 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string,
 ): Promise<{ access_token: string; user_id: string }> {
-  const tokenUrl = `${GRAPH_FB}/oauth/access_token`;
-  const body = new URLSearchParams({
-    client_id: env.INSTAGRAM_APP_ID,
-    client_secret: env.INSTAGRAM_CLIENT_SECRET,
-    grant_type: "authorization_code",
-    redirect_uri: redirectUri,
-    code,
-  });
+  const tokenUrl = `${INSTAGRAM_OAUTH_BASE}/oauth/access_token`;
+  const body = new FormData();
+  body.set("client_id", env.INSTAGRAM_APP_ID);
+  body.set("client_secret", env.INSTAGRAM_CLIENT_SECRET);
+  body.set("grant_type", "authorization_code");
+  body.set("redirect_uri", redirectUri);
+  body.set("code", code);
 
   console.log("[ig-token-exchange] POST", tokenUrl, "redirect_uri:", redirectUri);
 
@@ -52,8 +79,7 @@ export async function exchangeCodeForToken(
   try {
     res = await fetch(tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
+      body,
     });
   } catch (fetchErr) {
     console.error("[ig-token-exchange] Network error:", fetchErr);
@@ -61,31 +87,32 @@ export async function exchangeCodeForToken(
   }
 
   const text = await res.text();
+  const data = parseInstagramResponse(
+    text,
+    res.ok,
+    res.status,
+    "Instagram token exchange",
+  );
+  const tokenResponse = z.object({
+    access_token: z.string().min(1),
+    user_id: z.union([z.string(), z.number()]),
+  }).parse(data);
+  const userIdMatch = text.match(/"user_id"\s*:\s*(?:"([^"]+)"|(\d+))/);
+  const userId = userIdMatch?.[1] ?? userIdMatch?.[2] ?? String(tokenResponse.user_id);
 
-  if (!res.ok) {
-    console.error("[ig-token-exchange] Error:", res.status, text);
-    throw new Error(`Instagram token exchange failed (HTTP ${res.status}): ${text}`);
-  }
-
-  const data = JSON.parse(text) as { access_token: string; user_id?: number };
-  const userIdMatch = text.match(/"user_id"\s*:\s*(\d+)/);
-  const userId = userIdMatch?.[1] ?? String(data.user_id ?? "");
-
-  return { access_token: data.access_token, user_id: userId };
+  return { access_token: tokenResponse.access_token, user_id: userId };
 }
 
 export async function exchangeForLongLivedToken(
   shortLivedToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
-    grant_type: "fb_exchange_token",
-    client_id: env.INSTAGRAM_APP_ID,
+    grant_type: "ig_exchange_token",
     client_secret: env.INSTAGRAM_CLIENT_SECRET,
-    fb_exchange_token: shortLivedToken,
+    access_token: shortLivedToken,
   });
 
-  const tokenUrl = `${GRAPH_FB}/oauth/access_token?${params.toString()}`;
-  console.log("[ig-long-token] GET", tokenUrl.replace(env.INSTAGRAM_CLIENT_SECRET, "***").replace(shortLivedToken, "TOKEN"));
+  const tokenUrl = `${INSTAGRAM_GRAPH_BASE}/access_token?${params.toString()}`;
 
   let res: Response;
   try {
@@ -96,33 +123,58 @@ export async function exchangeForLongLivedToken(
   }
 
   const text = await res.text();
-
-  if (!res.ok) {
-    console.error("[ig-long-token] Error:", res.status, text);
-    throw new Error(`Long-lived token exchange failed (HTTP ${res.status}): ${text}`);
-  }
-
-  return JSON.parse(text) as { access_token: string; expires_in: number };
+  const data = parseInstagramResponse(
+    text,
+    res.ok,
+    res.status,
+    "Long-lived token exchange",
+  );
+  return z.object({
+    access_token: z.string().min(1),
+    expires_in: z.number().int().positive(),
+  }).parse(data);
 }
 
 export async function refreshLongLivedToken(
   token: string,
 ): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
-    grant_type: "fb_exchange_token",
-    fb_exchange_token: token,
-    client_id: env.INSTAGRAM_APP_ID,
-    client_secret: env.INSTAGRAM_CLIENT_SECRET,
+    grant_type: "ig_refresh_token",
+    access_token: token,
   });
 
-  const res = await fetch(`${GRAPH_FB}/oauth/access_token?${params.toString()}`);
+  const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/refresh_access_token?${params.toString()}`);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token refresh failed: ${res.status} ${text}`);
+  const text = await res.text();
+  const data = parseInstagramResponse(text, res.ok, res.status, "Token refresh");
+  return z.object({
+    access_token: z.string().min(1),
+    expires_in: z.number().int().positive(),
+  }).parse(data);
+}
+
+function parseInstagramResponse(
+  body: string,
+  ok: boolean,
+  status: number,
+  operation: string,
+): unknown {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new Error(`${operation} returned invalid JSON (HTTP ${status}).`);
   }
 
-  return (await res.json()) as { access_token: string; expires_in: number };
+  if (!ok) {
+    const error = z.object({
+      error: z.object({ message: z.string().optional() }).optional(),
+    }).safeParse(parsed);
+    const message = error.success ? error.data.error?.message : undefined;
+    throw new Error(`${operation} failed (HTTP ${status})${message ? `: ${message}` : "."}`);
+  }
+
+  return parsed;
 }
 
 export async function subscribeInstagramWebhooks(
@@ -132,7 +184,7 @@ export async function subscribeInstagramWebhooks(
   const fields = ["messages", "messaging_postbacks"];
   const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
   const res = await fetch(
-    `${GRAPH_FB}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -159,12 +211,12 @@ export async function fetchIgUserProfile(
   accessToken: string,
 ): Promise<{ name?: string; username?: string; profile_pic?: string }> {
   const params = new URLSearchParams({
-    fields: "name,username,profile_pic",
+    fields: "name,username,profile_picture_url",
     access_token: accessToken,
   });
 
   const res = await fetch(
-    `${GRAPH_FB}/${encodeURIComponent(userId)}?${params}`,
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params}`,
   );
 
   if (!res.ok) {
@@ -172,7 +224,17 @@ export async function fetchIgUserProfile(
     throw new Error(`IG user profile fetch failed for ${userId}: ${res.status} ${text}`);
   }
 
-  return (await res.json()) as { name?: string; username?: string; profile_pic?: string };
+  const profile = z.object({
+    name: z.string().optional(),
+    username: z.string().optional(),
+    profile_picture_url: z.string().optional(),
+  }).parse(await res.json());
+
+  return {
+    name: profile.name,
+    username: profile.username,
+    profile_pic: profile.profile_picture_url,
+  };
 }
 
 export async function getInstagramProfile(
@@ -184,53 +246,30 @@ export async function getInstagramProfile(
   profile_picture_url?: string;
 }> {
   const params = new URLSearchParams({
-    fields: "id,user_id,username,account_type,profile_picture_url",
+    fields: "user_id,username,account_type,profile_picture_url",
     access_token: token,
   });
 
-  const res = await fetch(`${GRAPH_FB}/me?${params.toString()}`);
+  const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`);
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
   }
 
-  const data = (await res.json()) as {
-    id?: string;
-    user_id?: string;
-    username: string;
-    account_type?: string;
-    profile_picture_url?: string;
-  };
+  const data = z.object({
+    user_id: z.union([z.string(), z.number()]),
+    username: z.string().min(1),
+    account_type: z.string().optional(),
+    profile_picture_url: z.string().optional(),
+  }).parse(await res.json());
 
   return {
-    id: data.user_id ?? data.id ?? "",
+    id: String(data.user_id),
     username: data.username,
     account_type: data.account_type,
     profile_picture_url: data.profile_picture_url,
   };
-}
-
-export async function checkFacebookPageLinked(
-  igUserId: string,
-  accessToken: string,
-): Promise<boolean> {
-  const params = new URLSearchParams({
-    fields: "connected_instagram_account",
-    access_token: accessToken,
-  });
-
-  const res = await fetch(
-    `${GRAPH_FB}/${encodeURIComponent(igUserId)}?${params.toString()}`,
-  );
-
-  if (!res.ok) return true;
-
-  const data = (await res.json()) as {
-    connected_instagram_account?: { id: string };
-  };
-
-  return data.connected_instagram_account != null;
 }
 
 export async function checkIsFollower(
@@ -239,7 +278,7 @@ export async function checkIsFollower(
   maxPages = 20,
 ): Promise<boolean> {
   let url: string | null =
-    `${GRAPH_FB}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
 
   for (let page = 0; page < maxPages && url; page++) {
     const res = await fetch(url);

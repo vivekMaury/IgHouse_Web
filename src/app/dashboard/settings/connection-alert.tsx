@@ -33,7 +33,7 @@ const ERROR_MESSAGES: Record<
   token_exchange_failed: {
     title: "Authentication failed",
     message:
-      "Failed to complete Instagram authentication. This can happen if the login session expired or your account type is not supported. Please ensure you have a Business or Creator account and try again.",
+      "Instagram could not validate the token exchange. Check that the Instagram App ID and client secret belong to the same Meta app configured for Instagram Login, and that the redirect URI matches exactly. Then try again.",
     variant: "error",
   },
   db_save_failed: {
@@ -62,6 +62,48 @@ const ERROR_MESSAGES: Record<
     title: "Business account not found",
     message:
       "Could not find your Instagram Business Account ID. Please ensure your Instagram account is properly set up as a Business or Creator account.",
+    variant: "error",
+  },
+  missing_params: {
+    title: "Incomplete response from Instagram",
+    message:
+      "Instagram did not return the required authorization data. This can happen if the page was refreshed mid-flow. Please try connecting again.",
+    variant: "error",
+  },
+  missing_state_cookie: {
+    title: "Session expired",
+    message:
+      "Your connection session expired or your browser blocked the required cookie. Please make sure third-party cookies are allowed for this site, then try again.",
+    variant: "warning",
+  },
+  state_mismatch: {
+    title: "Security check failed",
+    message:
+      "The connection request could not be verified — this can happen if you used an old or duplicate tab. Please close all IgInbox tabs and try connecting from a fresh page.",
+    variant: "error",
+  },
+  invalid_state: {
+    title: "Invalid session",
+    message:
+      "The connection session data was incomplete. Please try connecting your Instagram account again.",
+    variant: "error",
+  },
+  server_config: {
+    title: "Server configuration error",
+    message:
+      "The server is missing required configuration. Please contact support if this persists.",
+    variant: "error",
+  },
+  workspace_access_failed: {
+    title: "Workspace could not be verified",
+    message:
+      "We could not verify your workspace membership. Please try again, and contact support if the problem persists.",
+    variant: "error",
+  },
+  workspace_access_denied: {
+    title: "Workspace access denied",
+    message:
+      "Your account no longer has access to the workspace that started this connection. Refresh the settings page and try again.",
     variant: "error",
   },
 };
