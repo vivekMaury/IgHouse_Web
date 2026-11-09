@@ -1,10 +1,9 @@
 import { env } from "@/lib/env";
 
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
-const GRAPH_FB_BASE = "https://graph.facebook.com";
-const GRAPH_FB_VERSION = "v26.0";
+const INSTAGRAM_API_BASE = "https://api.instagram.com";
 const GRAPH_IG_BASE = "https://graph.instagram.com";
-const GRAPH_API_VERSION = "v26.0";
+const GRAPH_API_VERSION = "v21.0";
 
 const SCOPES = [
   "instagram_business_basic",
@@ -40,10 +39,10 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ access_token: string; user_id: string }> {
-  const tokenUrl = `${GRAPH_FB_BASE}/${GRAPH_FB_VERSION}/oauth/access_token`;
+  const tokenUrl = `${INSTAGRAM_API_BASE}/oauth/access_token`;
   const body = new URLSearchParams({
     client_id: env.INSTAGRAM_APP_ID,
-    client_secret: env.META_APP_SECRET,
+    client_secret: env.INSTAGRAM_CLIENT_SECRET,
     grant_type: "authorization_code",
     redirect_uri: redirectUri,
     code,
@@ -82,13 +81,12 @@ export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
-    grant_type: "fb_exchange_token",
-    client_id: env.INSTAGRAM_APP_ID,
-    client_secret: env.META_APP_SECRET,
-    fb_exchange_token: shortLivedToken,
+    grant_type: "ig_exchange_token",
+    client_secret: env.INSTAGRAM_CLIENT_SECRET,
+    access_token: shortLivedToken,
   });
 
-  const tokenUrl = `${GRAPH_FB_BASE}/${GRAPH_FB_VERSION}/oauth/access_token?${params.toString()}`;
+  const tokenUrl = `${GRAPH_IG_BASE}/access_token?${params.toString()}`;
 
   let res: Response;
   try {

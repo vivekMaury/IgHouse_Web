@@ -1,9 +1,24 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { resetEnvCache } from "@/lib/env";
 import {
   getInstagramAuthUrl,
   getInstagramRedirectUri,
   subscribeInstagramWebhooks,
 } from "./instagram";
+
+beforeAll(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+  process.env.META_APP_ID = "123456";
+  process.env.META_APP_SECRET = "test-app-secret";
+  process.env.INSTAGRAM_APP_ID = "test-app-id";
+  process.env.INSTAGRAM_CLIENT_SECRET = "test-ig-client-secret";
+  process.env.META_WEBHOOK_VERIFY_TOKEN = "test-verify-token";
+  process.env.TOKEN_ENCRYPTION_KEY =
+    "aab1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1";
+  resetEnvCache();
+});
 
 describe("Instagram OAuth redirect URI", () => {
   it("uses the configured canonical URI and rejects missing configuration", () => {
@@ -16,7 +31,6 @@ describe("Instagram OAuth redirect URI", () => {
   });
 
   it("includes the exact redirect URI in the authorization URL", () => {
-    vi.stubEnv("INSTAGRAM_APP_ID", "test-app-id");
     const redirectUri = "https://iginbox.com/api/instagram/callback";
     const authUrl = new URL(getInstagramAuthUrl(redirectUri, "oauth-state"));
 

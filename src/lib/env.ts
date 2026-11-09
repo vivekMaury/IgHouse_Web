@@ -7,6 +7,7 @@ const serverSchema = z.object({
   META_APP_ID: z.string().min(1),
   META_APP_SECRET: z.string().min(1),
   INSTAGRAM_APP_ID: z.string().min(1),
+  INSTAGRAM_CLIENT_SECRET: z.string().min(1),
   INSTAGRAM_REDIRECT_URI: z.url().optional(),
   META_WEBHOOK_VERIFY_TOKEN: z.string().min(1),
   TOKEN_ENCRYPTION_KEY: z.string().min(64),
