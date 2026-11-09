@@ -80,13 +80,19 @@ export async function exchangeCodeForToken(
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<{ access_token: string; expires_in: number }> {
+  const secret = env.INSTAGRAM_CLIENT_SECRET;
+
+  console.log("[ig-long-token] Using secret prefix:", secret.slice(0, 4));
+  console.log("[ig-long-token] Short token prefix:", shortLivedToken.slice(0, 10));
+
   const params = new URLSearchParams({
     grant_type: "ig_exchange_token",
-    client_secret: env.META_APP_SECRET,
+    client_secret: secret,
     access_token: shortLivedToken,
   });
 
   const tokenUrl = `${GRAPH_IG_BASE}/access_token?${params.toString()}`;
+  console.log("[ig-long-token] GET", tokenUrl.replace(secret, "***").replace(shortLivedToken, "TOKEN"));
 
   let res: Response;
   try {
@@ -99,7 +105,9 @@ export async function exchangeForLongLivedToken(
   const text = await res.text();
 
   if (!res.ok) {
-    console.error("Meta Long-Lived Token Exchange Error:", text);
+    console.error("[ig-long-token] FULL ERROR RESPONSE:", text);
+    console.error("[ig-long-token] HTTP status:", res.status);
+    console.error("[ig-long-token] Response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
     throw new Error(`Long-lived token exchange failed (HTTP ${res.status}): ${text}`);
   }
 
