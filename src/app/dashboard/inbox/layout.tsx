@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 export const instant = false;
 
 export const metadata: Metadata = {
-  title: "Inbox",
+  title: "Inbox — Conversations",
+  robots: { index: false, follow: false },
 };
 
 export default async function InboxLayout({

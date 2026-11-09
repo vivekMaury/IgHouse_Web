@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Documentation",
-  description: "IgInbox documentation — learn how to set up automations, connect Instagram, and grow your audience.",
+  title: "Documentation & Guides",
+  description:
+    "IgInbox docs — step-by-step guides to connect Instagram, build automation flows, set up DM triggers, and manage your shared inbox.",
+  alternates: { canonical: "/docs" },
 };
 
 export default function DocsPage() {

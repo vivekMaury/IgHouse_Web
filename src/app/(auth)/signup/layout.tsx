@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sign up",
-  description: "Create your free IgInbox account and start automating Instagram DMs and comments.",
+  title: "Create Your Free Account",
+  description:
+    "Sign up for IgInbox free and start automating Instagram DMs, comment replies, and lead capture in minutes. No credit card required.",
 };
 
 export default function SignupLayout({ children }: { children: React.ReactNode }) {

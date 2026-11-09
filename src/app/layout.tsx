@@ -24,11 +24,23 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL("https://iginbox.com"),
   title: {
-    default: "IgInbox — Instagram DM & Comment Automation",
+    default: "IgInbox — Instagram DM & Comment Automation Platform",
     template: "%s | IgInbox",
   },
   description:
-    "Turn Instagram comments into automated sales funnels with visual flows, DM automation, and a shared inbox.",
+    "Automate Instagram DMs, comment replies, and story mentions with visual drag-and-drop flows. Capture leads, qualify prospects, and close sales — all on autopilot. Free plan available.",
+  keywords: [
+    "Instagram automation",
+    "Instagram DM automation",
+    "comment automation",
+    "Instagram chatbot",
+    "Instagram marketing tool",
+    "DM funnel",
+    "Instagram lead generation",
+    "ManyChat alternative",
+    "Instagram auto reply",
+    "social media automation",
+  ],
   icons: {
     icon: [
       { url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
@@ -37,9 +49,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
-    title: "IgInbox — Instagram DM & Comment Automation",
+    title: "IgInbox — Automate Instagram DMs, Comments & Story Replies",
     description:
-      "Build visual flows that reply to comments, send DMs, capture leads, and qualify prospects — all on autopilot.",
+      "Build visual flows that reply to comments, send DMs, capture leads, and qualify prospects — all on autopilot. Trusted by creators and brands.",
     url: "https://iginbox.com",
     siteName: "IgInbox",
     locale: "en_US",
@@ -47,13 +59,23 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "IgInbox — Instagram DM & Comment Automation",
+    title: "IgInbox — Automate Instagram DMs, Comments & Story Replies",
     description:
-      "Build visual flows that reply to comments, send DMs, capture leads, and qualify prospects — all on autopilot.",
+      "Build drag-and-drop flows that auto-reply to comments, send DMs, capture leads, and qualify prospects. Free plan available.",
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: "https://iginbox.com",
   },
 };
 
