@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_API_BASE = "https://api.instagram.com";
 const GRAPH_IG_BASE = "https://graph.instagram.com";
-const GRAPH_API_VERSION = "v21.0";
+const GRAPH_API_VERSION = "v26.0";
 
 const SCOPES = [
   "instagram_business_basic",

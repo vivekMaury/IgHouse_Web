@@ -55,7 +55,7 @@ describe("subscribeInstagramWebhooks", () => {
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
-      "https://graph.instagram.com/v21.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
+      "https://graph.instagram.com/v26.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
     );
     expect(options.method).toBe("POST");
     expect(new Headers(options.headers).get("Authorization")).toBe(

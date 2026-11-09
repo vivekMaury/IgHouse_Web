@@ -1,7 +1,7 @@
 import type { Action } from "@/lib/engine/step";
 import { fetchWithRetry } from "@/lib/meta/fetch-with-retry";
 
-const GRAPH_API = "https://graph.instagram.com/v21.0";
+const GRAPH_API = "https://graph.instagram.com/v26.0";
 
 export type SendContext = {
   accessToken: string;
