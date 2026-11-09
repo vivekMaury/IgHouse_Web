@@ -43,18 +43,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No workspace found. Please log out and sign up again." }, { status: 400 });
     }
 
-    // Validate required env vars before attempting OAuth
-    const igAppId = process.env.INSTAGRAM_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
-
-    if (!igAppId || !appSecret) {
-      console.error("Instagram connect: INSTAGRAM_APP_ID or META_APP_SECRET not configured");
-      return NextResponse.json(
-        { error: "Instagram integration not configured. INSTAGRAM_APP_ID and META_APP_SECRET must be set in environment variables." },
-        { status: 500 },
-      );
-    }
-
     const state = randomBytes(32).toString("hex");
 
     const redirectUri = getInstagramRedirectUri();

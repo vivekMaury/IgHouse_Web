@@ -2,9 +2,9 @@ import { env } from "@/lib/env";
 
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
 const GRAPH_FB_BASE = "https://graph.facebook.com";
-const GRAPH_FB_VERSION = "v18.0";
+const GRAPH_FB_VERSION = "v26.0";
 const GRAPH_IG_BASE = "https://graph.instagram.com";
-const GRAPH_API_VERSION = "v21.0";
+const GRAPH_API_VERSION = "v26.0";
 
 const SCOPES = [
   "instagram_business_basic",
@@ -24,11 +24,10 @@ export function getInstagramRedirectUri(
 }
 
 export function getInstagramAuthUrl(redirectUri: string, state: string): string {
-  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
   const params = new URLSearchParams({
     enable_fb_login: "0",
     force_authentication: "1",
-    client_id: igAppId,
+    client_id: env.INSTAGRAM_APP_ID,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: SCOPES.join(","),
@@ -41,24 +40,10 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ access_token: string; user_id: string }> {
-  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
-  const appSecret = process.env.META_APP_SECRET ?? env.META_APP_SECRET;
-
-  if (!igAppId) {
-    throw new Error(
-      "INSTAGRAM_APP_ID is missing. Set it in Vercel environment variables (Settings → Environment Variables).",
-    );
-  }
-  if (!appSecret) {
-    throw new Error(
-      "META_APP_SECRET is missing. Set it in Vercel environment variables (Settings → Environment Variables).",
-    );
-  }
-
   const tokenUrl = `${GRAPH_FB_BASE}/${GRAPH_FB_VERSION}/oauth/access_token`;
   const body = new URLSearchParams({
-    client_id: igAppId,
-    client_secret: appSecret,
+    client_id: env.INSTAGRAM_APP_ID,
+    client_secret: env.META_APP_SECRET,
     grant_type: "authorization_code",
     redirect_uri: redirectUri,
     code,
@@ -96,12 +81,10 @@ export async function exchangeCodeForToken(
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<{ access_token: string; expires_in: number }> {
-  const igAppId = process.env.INSTAGRAM_APP_ID ?? env.INSTAGRAM_APP_ID;
-  const appSecret = process.env.META_APP_SECRET ?? env.META_APP_SECRET;
   const params = new URLSearchParams({
     grant_type: "fb_exchange_token",
-    client_id: igAppId,
-    client_secret: appSecret,
+    client_id: env.INSTAGRAM_APP_ID,
+    client_secret: env.META_APP_SECRET,
     fb_exchange_token: shortLivedToken,
   });
 
