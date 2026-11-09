@@ -82,7 +82,7 @@ export async function exchangeForLongLivedToken(
 ): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
     grant_type: "ig_exchange_token",
-    client_secret: env.INSTAGRAM_CLIENT_SECRET,
+    client_secret: env.META_APP_SECRET,
     access_token: shortLivedToken,
   });
 
