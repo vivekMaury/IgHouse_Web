@@ -1,4 +1,4 @@
-const GRAPH_API_BASE = "https://graph.instagram.com";
+const GRAPH_API_BASE = "https://graph.facebook.com";
 const GRAPH_API_VERSION = "v26.0";
 
 type IgParticipant = {

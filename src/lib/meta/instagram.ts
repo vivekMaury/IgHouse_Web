@@ -1,9 +1,7 @@
 import { env } from "@/lib/env";
 
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
-const INSTAGRAM_API_BASE = "https://api.instagram.com";
-const GRAPH_IG_BASE = "https://graph.instagram.com";
-const GRAPH_API_VERSION = "v26.0";
+const GRAPH_FB = "https://graph.facebook.com/v26.0";
 
 const SCOPES = [
   "instagram_business_basic",
@@ -37,9 +35,9 @@ export function getInstagramAuthUrl(redirectUri: string, state: string): string 
 
 export async function exchangeCodeForToken(
   code: string,
-  redirectUri: string
+  redirectUri: string,
 ): Promise<{ access_token: string; user_id: string }> {
-  const tokenUrl = `${INSTAGRAM_API_BASE}/oauth/access_token`;
+  const tokenUrl = `${GRAPH_FB}/oauth/access_token`;
   const body = new URLSearchParams({
     client_id: env.INSTAGRAM_APP_ID,
     client_secret: env.INSTAGRAM_CLIENT_SECRET,
@@ -65,12 +63,11 @@ export async function exchangeCodeForToken(
   const text = await res.text();
 
   if (!res.ok) {
-    console.error("Meta Token Exchange Error:", text);
+    console.error("[ig-token-exchange] Error:", res.status, text);
     throw new Error(`Instagram token exchange failed (HTTP ${res.status}): ${text}`);
   }
 
   const data = JSON.parse(text) as { access_token: string; user_id?: number };
-  // Parse user_id from raw text to avoid JavaScript number precision loss.
   const userIdMatch = text.match(/"user_id"\s*:\s*(\d+)/);
   const userId = userIdMatch?.[1] ?? String(data.user_id ?? "");
 
@@ -78,21 +75,17 @@ export async function exchangeCodeForToken(
 }
 
 export async function exchangeForLongLivedToken(
-  shortLivedToken: string
+  shortLivedToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
-  const secret = env.INSTAGRAM_CLIENT_SECRET;
-
-  console.log("[ig-long-token] Using secret prefix:", secret.slice(0, 4));
-  console.log("[ig-long-token] Short token prefix:", shortLivedToken.slice(0, 10));
-
   const params = new URLSearchParams({
-    grant_type: "ig_exchange_token",
-    client_secret: secret,
-    access_token: shortLivedToken,
+    grant_type: "fb_exchange_token",
+    client_id: env.INSTAGRAM_APP_ID,
+    client_secret: env.INSTAGRAM_CLIENT_SECRET,
+    fb_exchange_token: shortLivedToken,
   });
 
-  const tokenUrl = `${GRAPH_IG_BASE}/access_token?${params.toString()}`;
-  console.log("[ig-long-token] GET", tokenUrl.replace(secret, "***").replace(shortLivedToken, "TOKEN"));
+  const tokenUrl = `${GRAPH_FB}/oauth/access_token?${params.toString()}`;
+  console.log("[ig-long-token] GET", tokenUrl.replace(env.INSTAGRAM_CLIENT_SECRET, "***").replace(shortLivedToken, "TOKEN"));
 
   let res: Response;
   try {
@@ -105,9 +98,7 @@ export async function exchangeForLongLivedToken(
   const text = await res.text();
 
   if (!res.ok) {
-    console.error("[ig-long-token] FULL ERROR RESPONSE:", text);
-    console.error("[ig-long-token] HTTP status:", res.status);
-    console.error("[ig-long-token] Response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
+    console.error("[ig-long-token] Error:", res.status, text);
     throw new Error(`Long-lived token exchange failed (HTTP ${res.status}): ${text}`);
   }
 
@@ -115,14 +106,16 @@ export async function exchangeForLongLivedToken(
 }
 
 export async function refreshLongLivedToken(
-  token: string
+  token: string,
 ): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
-    grant_type: "ig_refresh_token",
-    access_token: token,
+    grant_type: "fb_exchange_token",
+    fb_exchange_token: token,
+    client_id: env.INSTAGRAM_APP_ID,
+    client_secret: env.INSTAGRAM_CLIENT_SECRET,
   });
 
-  const res = await fetch(`${GRAPH_IG_BASE}/refresh_access_token?${params.toString()}`);
+  const res = await fetch(`${GRAPH_FB}/oauth/access_token?${params.toString()}`);
 
   if (!res.ok) {
     const text = await res.text();
@@ -139,7 +132,7 @@ export async function subscribeInstagramWebhooks(
   const fields = ["messages", "messaging_postbacks"];
   const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
   const res = await fetch(
-    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
+    `${GRAPH_FB}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -171,7 +164,7 @@ export async function fetchIgUserProfile(
   });
 
   const res = await fetch(
-    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(userId)}?${params}`,
+    `${GRAPH_FB}/${encodeURIComponent(userId)}?${params}`,
   );
 
   if (!res.ok) {
@@ -183,7 +176,7 @@ export async function fetchIgUserProfile(
 }
 
 export async function getInstagramProfile(
-  token: string
+  token: string,
 ): Promise<{
   id: string;
   username: string;
@@ -195,7 +188,7 @@ export async function getInstagramProfile(
     access_token: token,
   });
 
-  const res = await fetch(`${GRAPH_IG_BASE}/me?${params.toString()}`);
+  const res = await fetch(`${GRAPH_FB}/me?${params.toString()}`);
 
   if (!res.ok) {
     const text = await res.text();
@@ -228,7 +221,7 @@ export async function checkFacebookPageLinked(
   });
 
   const res = await fetch(
-    `${GRAPH_IG_BASE}/${GRAPH_API_VERSION}/${encodeURIComponent(igUserId)}?${params.toString()}`,
+    `${GRAPH_FB}/${encodeURIComponent(igUserId)}?${params.toString()}`,
   );
 
   if (!res.ok) return true;
@@ -240,17 +233,13 @@ export async function checkFacebookPageLinked(
   return data.connected_instagram_account != null;
 }
 
-/**
- * Check if a specific user follows the authenticated IG account.
- * Paginates GET /me/followers (max ~500 entries) looking for the target user.
- */
 export async function checkIsFollower(
   targetUserId: string,
   accessToken: string,
   maxPages = 20,
 ): Promise<boolean> {
   let url: string | null =
-    `${GRAPH_IG_BASE}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
+    `${GRAPH_FB}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
 
   for (let page = 0; page < maxPages && url; page++) {
     const res = await fetch(url);

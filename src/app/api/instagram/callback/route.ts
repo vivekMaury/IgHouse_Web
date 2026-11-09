@@ -18,7 +18,16 @@ type OAuthState = {
   state: string;
   purpose?: "login" | "connect";
   workspaceId?: string;
+  userId?: string;
 };
+
+function settingsRedirect(origin: string, error: string): NextResponse {
+  return NextResponse.redirect(`${origin}/dashboard/settings?error=${error}`);
+}
+
+function loginRedirect(origin: string, error: string): NextResponse {
+  return NextResponse.redirect(`${origin}/login?error=${error}`);
+}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -27,52 +36,48 @@ export async function GET(request: Request) {
   const error = searchParams.get("error");
   const errorReason = searchParams.get("error_reason");
 
-  const settingsUrl = `${origin}/dashboard/settings`;
-  const loginUrl = `${origin}/login`;
-
-  // ── Parse state cookie ──
-  let stateCookieValue: string | undefined;
-  try {
-    const cookieStore = await cookies();
-    stateCookieValue = cookieStore.get("ig_oauth_state")?.value;
-  } catch (err) {
-    console.error("[ig-callback] Failed to read cookies:", err);
-  }
+  // ── Read & immediately clear state cookie (prevents replay) ──
+  const cookieStore = await cookies();
+  const stateCookieValue = cookieStore.get("ig_oauth_state")?.value;
+  cookieStore.delete("ig_oauth_state");
 
   let storedState: OAuthState | null = null;
   if (stateCookieValue) {
     try {
       storedState = JSON.parse(stateCookieValue) as OAuthState;
     } catch {
-      console.error("[ig-callback] Failed to parse state cookie");
+      console.error("[ig-callback] Malformed state cookie");
     }
   }
 
   const isLoginFlow = storedState?.purpose === "login";
-  const errorRedirect = isLoginFlow ? loginUrl : settingsUrl;
+  const errorRedirect = (errorCode: string) =>
+    isLoginFlow
+      ? loginRedirect(origin, errorCode)
+      : settingsRedirect(origin, errorCode);
 
+  // ── Handle OAuth errors from Meta ──
   if (error) {
     console.error("[ig-callback] OAuth denied:", error, errorReason);
-    const errorCode =
-      errorReason === "user_denied" || error === "access_denied"
-        ? "permissions_denied"
-        : "instagram_auth_denied";
-    return NextResponse.redirect(`${errorRedirect}?error=${errorCode}`);
+    if (errorReason === "user_denied" || error === "access_denied") {
+      return errorRedirect("permissions_denied");
+    }
+    return errorRedirect("instagram_auth_denied");
   }
 
   if (!code || !state) {
     console.error("[ig-callback] Missing code or state params");
-    return NextResponse.redirect(`${errorRedirect}?error=missing_params`);
+    return errorRedirect("missing_params");
   }
 
   if (!storedState) {
-    console.error("[ig-callback] ig_oauth_state cookie not found");
-    return NextResponse.redirect(`${errorRedirect}?error=missing_state_cookie`);
+    console.error("[ig-callback] ig_oauth_state cookie not found (may have expired or been blocked by browser)");
+    return errorRedirect("missing_state_cookie");
   }
 
   if (state !== storedState.state) {
-    console.error("[ig-callback] State mismatch");
-    return NextResponse.redirect(`${errorRedirect}?error=state_mismatch`);
+    console.error("[ig-callback] State mismatch — possible CSRF or stale redirect");
+    return errorRedirect("state_mismatch");
   }
 
   // ── Supabase clients ──
@@ -82,14 +87,14 @@ export async function GET(request: Request) {
 
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
     console.error("[ig-callback] Missing Supabase env vars");
-    return NextResponse.redirect(`${errorRedirect}?error=server_config`);
+    return errorRedirect("server_config");
   }
 
   const admin = createSupabaseClient(supabaseUrl, supabaseServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // ── Exchange code for tokens ──
+  // ── Exchange code → short-lived token (Graph API v26.0) ──
   let shortToken: string;
   let igUserId: string;
   try {
@@ -97,25 +102,26 @@ export async function GET(request: Request) {
     const result = await exchangeCodeForToken(code, redirectUri);
     shortToken = result.access_token;
     igUserId = result.user_id;
-    console.log("[ig-callback] Short token obtained for user:", igUserId);
+    console.log("[ig-callback] Short-lived token obtained for IG user:", igUserId);
   } catch (err) {
     console.error("[ig-callback] Token exchange failed:", (err as Error).message);
-    return NextResponse.redirect(`${errorRedirect}?error=token_exchange_failed`);
+    return errorRedirect("token_exchange_failed");
   }
 
+  // ── Exchange short-lived → 60-day long-lived token (fb_exchange_token) ──
   let longToken: string;
   let expiresIn: number;
   try {
     const result = await exchangeForLongLivedToken(shortToken);
     longToken = result.access_token;
     expiresIn = result.expires_in;
-    console.log("[ig-callback] Long-lived token obtained, expires in:", expiresIn);
+    console.log("[ig-callback] Long-lived token obtained, expires in:", expiresIn, "seconds");
   } catch (err) {
     console.error("[ig-callback] Long-lived token exchange failed:", (err as Error).message);
-    return NextResponse.redirect(`${errorRedirect}?error=token_exchange_failed`);
+    return errorRedirect("token_exchange_failed");
   }
 
-  // ── Get Instagram profile & validate ──
+  // ── Fetch Instagram profile & validate account type ──
   let igBusinessAccountId: string;
   let username = "unknown";
   let avatarUrl: string | null = null;
@@ -132,31 +138,31 @@ export async function GET(request: Request) {
       profile.account_type !== "MEDIA_CREATOR"
     ) {
       console.error("[ig-callback] Personal account detected:", profile.account_type);
-      return NextResponse.redirect(`${errorRedirect}?error=personal_account`);
+      return errorRedirect("personal_account");
     }
   } catch (err) {
     console.error("[ig-callback] Profile fetch failed:", (err as Error).message);
-    return NextResponse.redirect(`${errorRedirect}?error=profile_fetch_failed`);
+    return errorRedirect("profile_fetch_failed");
   }
 
   if (!igBusinessAccountId) {
     console.error("[ig-callback] Missing IG business account ID");
-    return NextResponse.redirect(`${errorRedirect}?error=missing_ig_business_id`);
+    return errorRedirect("missing_ig_business_id");
   }
 
-  // Check Facebook Page linkage (non-blocking)
+  // ── Check Facebook Page linkage ──
   try {
     const hasPage = await checkFacebookPageLinked(igBusinessAccountId, longToken);
     if (!hasPage) {
       console.error("[ig-callback] No linked Facebook Page for:", username);
-      return NextResponse.redirect(`${errorRedirect}?error=no_facebook_page`);
+      return errorRedirect("no_facebook_page");
     }
   } catch (err) {
     console.warn("[ig-callback] Facebook Page check skipped:", (err as Error).message);
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  //  LOGIN FLOW — find or create user, sign them in, connect account
+  //  LOGIN FLOW
   // ═══════════════════════════════════════════════════════════════════
   if (isLoginFlow) {
     return handleLoginFlow({
@@ -173,11 +179,10 @@ export async function GET(request: Request) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  //  CONNECT FLOW — user already logged in, link to workspace
+  //  CONNECT FLOW — resolve user session with fallback
   // ═══════════════════════════════════════════════════════════════════
   let userId: string | null = null;
   try {
-    const cookieStore = await cookies();
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
@@ -189,17 +194,41 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     userId = user?.id ?? null;
   } catch (err) {
-    console.error("[ig-callback] Auth check failed:", err);
+    console.error("[ig-callback] Supabase session lookup failed:", err);
+  }
+
+  // Fallback: resolve user via workspace membership from the state cookie.
+  // This handles cases where the Supabase auth cookie is not sent back
+  // after the external Meta redirect (Referer: https://1.instagram.com/).
+  if (!userId && storedState.workspaceId) {
+    console.warn("[ig-callback] Session missing after Meta redirect, falling back to state.workspaceId");
+    try {
+      const { data: members } = await admin
+        .from("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", storedState.workspaceId)
+        .eq("role", "owner")
+        .limit(1)
+        .maybeSingle();
+
+      if (members) {
+        userId = members.user_id as string;
+        console.log("[ig-callback] Resolved user from workspace membership:", userId);
+      }
+    } catch (err) {
+      console.error("[ig-callback] Workspace member fallback failed:", err);
+    }
   }
 
   if (!userId) {
-    return NextResponse.redirect(`${origin}/login`);
+    console.error("[ig-callback] No authenticated user and no fallback available");
+    return NextResponse.redirect(`${origin}/login?next=${encodeURIComponent("/api/instagram/connect")}`);
   }
 
   const workspaceId = storedState.workspaceId;
   if (!workspaceId) {
     console.error("[ig-callback] Missing workspaceId in state");
-    return NextResponse.redirect(`${settingsUrl}?error=invalid_state`);
+    return settingsRedirect(origin, "invalid_state");
   }
 
   return saveAccountAndRedirect({
@@ -212,8 +241,8 @@ export async function GET(request: Request) {
     avatarUrl,
     longToken,
     expiresIn,
-    redirectUrl: `${settingsUrl}?connected=true`,
-    errorUrl: settingsUrl,
+    redirectUrl: `${origin}/dashboard/settings?connected=true`,
+    errorUrl: `${origin}/dashboard/settings`,
   });
 }
 
@@ -243,7 +272,6 @@ async function handleLoginFlow({
 }) {
   const loginUrl = `${origin}/login`;
 
-  // Look up existing connected account
   const { data: existingAccount } = await admin
     .from("connected_accounts")
     .select("workspace_id")
@@ -257,7 +285,6 @@ async function handleLoginFlow({
   let workspaceId: string;
 
   if (existingAccount) {
-    // Existing user — find them via workspace membership
     const { data: member } = await admin
       .from("workspace_members")
       .select("user_id")
@@ -268,14 +295,13 @@ async function handleLoginFlow({
 
     if (!member) {
       console.error("[ig-login] No owner found for workspace:", existingAccount.workspace_id);
-      return NextResponse.redirect(`${loginUrl}?error=instagram_auth_denied`);
+      return loginRedirect(origin, "instagram_auth_denied");
     }
 
     userId = member.user_id as string;
     workspaceId = existingAccount.workspace_id as string;
     console.log("[ig-login] Existing user found:", userId, "workspace:", workspaceId);
   } else {
-    // New user — create account via Supabase admin
     const syntheticEmail = `ig_${igBusinessAccountId}@instagram.iginbox.local`;
     const tempPassword = randomBytes(32).toString("hex");
 
@@ -292,14 +318,12 @@ async function handleLoginFlow({
 
     if (createError || !newUser.user) {
       console.error("[ig-login] Failed to create user:", createError);
-      return NextResponse.redirect(`${loginUrl}?error=instagram_auth_denied`);
+      return loginRedirect(origin, "instagram_auth_denied");
     }
 
     userId = newUser.user.id;
     console.log("[ig-login] New user created:", userId);
 
-    // handle_new_user trigger auto-creates workspace + member
-    // Fetch the workspace it created
     const { data: member } = await admin
       .from("workspace_members")
       .select("workspace_id")
@@ -309,13 +333,12 @@ async function handleLoginFlow({
 
     if (!member) {
       console.error("[ig-login] Workspace not auto-created for user:", userId);
-      return NextResponse.redirect(`${loginUrl}?error=instagram_auth_denied`);
+      return loginRedirect(origin, "instagram_auth_denied");
     }
 
     workspaceId = member.workspace_id as string;
   }
 
-  // Generate a magic link to sign the user in
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: (await admin.auth.admin.getUserById(userId)).data.user?.email ?? "",
@@ -324,11 +347,10 @@ async function handleLoginFlow({
 
   if (linkError || !linkData.properties?.hashed_token) {
     console.error("[ig-login] Failed to generate magic link:", linkError);
-    return NextResponse.redirect(`${loginUrl}?error=instagram_auth_denied`);
+    return loginRedirect(origin, "instagram_auth_denied");
   }
 
-  // Save/update the connected account for this workspace
-  const saveResult = await saveAccountAndRedirect({
+  return saveAccountAndRedirect({
     request,
     admin,
     workspaceId,
@@ -341,8 +363,6 @@ async function handleLoginFlow({
     redirectUrl: `${supabaseUrl}/auth/v1/verify?token=${linkData.properties.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${origin}/callback?next=/dashboard`)}`,
     errorUrl: loginUrl,
   });
-
-  return saveResult;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -373,7 +393,6 @@ async function saveAccountAndRedirect({
   redirectUrl: string;
   errorUrl: string;
 }) {
-  // Encrypt token
   let encryptedHex: string;
   let ivHex: string;
   try {
@@ -385,7 +404,6 @@ async function saveAccountAndRedirect({
     return NextResponse.redirect(`${errorUrl}?error=encryption_failed`);
   }
 
-  // Subscribe webhooks
   try {
     await subscribeInstagramWebhooks(igBusinessAccountId, longToken);
   } catch (err) {
@@ -393,7 +411,6 @@ async function saveAccountAndRedirect({
     return NextResponse.redirect(`${errorUrl}?error=webhook_subscription_failed`);
   }
 
-  // Save to DB
   try {
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
@@ -447,7 +464,5 @@ async function saveAccountAndRedirect({
     return NextResponse.redirect(`${errorUrl}?error=db_save_failed`);
   }
 
-  const response = NextResponse.redirect(redirectUrl);
-  response.cookies.delete("ig_oauth_state");
-  return response;
+  return NextResponse.redirect(redirectUrl);
 }
