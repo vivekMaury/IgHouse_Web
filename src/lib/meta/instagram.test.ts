@@ -78,7 +78,7 @@ describe("Instagram Login token exchange", () => {
     });
   });
 
-  it("exchanges short-lived tokens using Instagram's 60-day token grant", async () => {
+  it("exchanges short-lived tokens using Instagram's 60-day token grant via POST", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({ access_token: "long-token", expires_in: 5_184_000 }),
     );
@@ -89,12 +89,44 @@ describe("Instagram Login token exchange", () => {
       expires_in: 5_184_000,
     });
 
-    const [url] = fetchMock.mock.calls[0] as [string];
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     const parsedUrl = new URL(url);
     expect(parsedUrl.origin).toBe("https://graph.instagram.com");
     expect(parsedUrl.pathname).toBe("/access_token");
+    expect(options.method).toBe("POST");
     expect(parsedUrl.searchParams.get("grant_type")).toBe("ig_exchange_token");
     expect(parsedUrl.searchParams.get("access_token")).toBe("short-token");
+  });
+
+  it("falls back to GET if POST token exchange fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: "Unsupported request - method type: post",
+              type: "IGApiException",
+              code: 100,
+            },
+          }),
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "long-token-via-get", expires_in: 5_184_000 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(exchangeForLongLivedToken("short-token")).resolves.toEqual({
+      access_token: "long-token-via-get",
+      expires_in: 5_184_000,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [getUrl, getOptions] = fetchMock.mock.calls[1] as [string, RequestInit | undefined];
+    expect(getOptions?.method).toBeUndefined();
+    expect(new URL(getUrl).searchParams.get("grant_type")).toBe("ig_exchange_token");
   });
 
   it("refreshes long-lived tokens using Instagram's refresh endpoint", async () => {

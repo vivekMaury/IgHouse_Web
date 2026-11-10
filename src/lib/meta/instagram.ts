@@ -106,33 +106,100 @@ export async function exchangeCodeForToken(
 export async function exchangeForLongLivedToken(
   shortLivedToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
-  const params = new URLSearchParams({
-    grant_type: "ig_exchange_token",
-    client_secret: env.INSTAGRAM_CLIENT_SECRET,
-    access_token: shortLivedToken,
-  });
+  const secrets = [
+    env.INSTAGRAM_CLIENT_SECRET,
+    ...(env.META_APP_SECRET && env.META_APP_SECRET !== env.INSTAGRAM_CLIENT_SECRET
+      ? [env.META_APP_SECRET]
+      : []),
+  ];
 
-  const tokenUrl = `${INSTAGRAM_GRAPH_BASE}/access_token?${params.toString()}`;
+  let lastError: Error | null = null;
 
-  let res: Response;
-  try {
-    res = await fetch(tokenUrl);
-  } catch (fetchErr) {
-    console.error("[ig-long-token] Network error:", fetchErr);
-    throw new Error(`Long-lived token exchange network error: ${(fetchErr as Error).message}`);
+  for (const secret of secrets) {
+    const params = new URLSearchParams({
+      grant_type: "ig_exchange_token",
+      client_secret: secret,
+      access_token: shortLivedToken,
+    });
+
+    // 1. Try POST with form-urlencoded body (Meta requires POST for token exchanges in newer API releases)
+    try {
+      const postUrl = `${INSTAGRAM_GRAPH_BASE}/access_token?${params.toString()}`;
+      const res = await fetch(postUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+
+      const text = await res.text();
+      if (res.ok) {
+        const data = parseInstagramResponse(
+          text,
+          true,
+          res.status,
+          "Long-lived token exchange",
+        );
+        return z
+          .object({
+            access_token: z.string().min(1),
+            expires_in: z.number().int().positive(),
+          })
+          .parse(data);
+      }
+
+      console.warn(`[ig-long-token] POST exchange failed (${res.status}):`, text);
+      try {
+        parseInstagramResponse(text, false, res.status, "Long-lived token exchange");
+      } catch (err) {
+        lastError = err as Error;
+      }
+    } catch (fetchErr) {
+      console.error("[ig-long-token] POST network error:", fetchErr);
+      lastError = new Error(
+        `Long-lived token exchange network error: ${(fetchErr as Error).message}`,
+      );
+    }
+
+    // 2. Try GET with query parameters (legacy fallback)
+    try {
+      const getUrl = `${INSTAGRAM_GRAPH_BASE}/access_token?${params.toString()}`;
+      const res = await fetch(getUrl);
+      const text = await res.text();
+      if (res.ok) {
+        const data = parseInstagramResponse(
+          text,
+          true,
+          res.status,
+          "Long-lived token exchange",
+        );
+        return z
+          .object({
+            access_token: z.string().min(1),
+            expires_in: z.number().int().positive(),
+          })
+          .parse(data);
+      }
+
+      console.warn(`[ig-long-token] GET exchange failed (${res.status}):`, text);
+      try {
+        parseInstagramResponse(text, false, res.status, "Long-lived token exchange");
+      } catch (err) {
+        lastError = err as Error;
+      }
+    } catch (fetchErr) {
+      console.error("[ig-long-token] GET network error:", fetchErr);
+      lastError = new Error(
+        `Long-lived token exchange network error: ${(fetchErr as Error).message}`,
+      );
+    }
   }
 
-  const text = await res.text();
-  const data = parseInstagramResponse(
-    text,
-    res.ok,
-    res.status,
-    "Long-lived token exchange",
+  throw (
+    lastError ??
+    new Error("Long-lived token exchange failed with all attempted methods and secrets.")
   );
-  return z.object({
-    access_token: z.string().min(1),
-    expires_in: z.number().int().positive(),
-  }).parse(data);
 }
 
 export async function refreshLongLivedToken(
@@ -143,14 +210,37 @@ export async function refreshLongLivedToken(
     access_token: token,
   });
 
-  const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/refresh_access_token?${params.toString()}`);
+  let res: Response;
+  let text = "";
+  try {
+    // 1. Try GET first (standard documented method for refresh)
+    res = await fetch(`${INSTAGRAM_GRAPH_BASE}/refresh_access_token?${params.toString()}`);
+    text = await res.text();
 
-  const text = await res.text();
+    // If GET fails with unsupported method, fallback to POST
+    if (!res.ok && text.toLowerCase().includes("unsupported request - method type")) {
+      console.warn("[ig-refresh-token] GET refresh rejected with method error, trying POST...");
+      res = await fetch(`${INSTAGRAM_GRAPH_BASE}/refresh_access_token?${params.toString()}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+      text = await res.text();
+    }
+  } catch (fetchErr) {
+    console.error("[ig-refresh-token] Network error:", fetchErr);
+    throw new Error(`Token refresh network error: ${(fetchErr as Error).message}`);
+  }
+
   const data = parseInstagramResponse(text, res.ok, res.status, "Token refresh");
-  return z.object({
-    access_token: z.string().min(1),
-    expires_in: z.number().int().positive(),
-  }).parse(data);
+  return z
+    .object({
+      access_token: z.string().min(1),
+      expires_in: z.number().int().positive(),
+    })
+    .parse(data);
 }
 
 function parseInstagramResponse(
