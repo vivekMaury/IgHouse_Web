@@ -436,9 +436,12 @@ async function saveAccountAndRedirect({
 
   try {
     await subscribeInstagramWebhooks(igBusinessAccountId, longToken);
+    console.log("[ig-callback] Webhooks subscribed for @" + username);
   } catch (err) {
-    console.error("[ig-callback] Webhook subscription failed:", (err as Error).message);
-    return errorRedirect(errorUrl, "webhook_subscription_failed");
+    console.warn(
+      "[ig-callback] Webhook subscription failed, proceeding with account save:",
+      (err as Error).message,
+    );
   }
 
   try {

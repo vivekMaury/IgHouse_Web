@@ -182,9 +182,11 @@ describe("subscribeInstagramWebhooks", () => {
     await subscribeInstagramWebhooks("ig-account", "access-token");
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      "https://graph.instagram.com/v22.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
-    );
+    const parsed = new URL(url);
+    expect(parsed.origin).toBe("https://graph.instagram.com");
+    expect(parsed.pathname).toBe("/v22.0/ig-account/subscribed_apps");
+    expect(parsed.searchParams.get("subscribed_fields")).toBe("messages,messaging_postbacks");
+    expect(parsed.searchParams.get("access_token")).toBe("access-token");
     expect(options.method).toBe("POST");
     expect(new Headers(options.headers).get("Authorization")).toBe(
       "Bearer access-token",

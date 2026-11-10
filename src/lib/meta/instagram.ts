@@ -272,10 +272,20 @@ export async function subscribeInstagramWebhooks(
   accessToken: string,
 ): Promise<void> {
   const fields = ["messages", "messaging_postbacks"];
-  const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
+  const params = new URLSearchParams({
+    subscribed_fields: fields.join(","),
+    access_token: accessToken,
+  });
+
   const urls = [
+    // 1. Instagram Graph API with version
     `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params.toString()}`,
+    // 2. Instagram Graph API unversioned
     `${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params.toString()}`,
+    // 3. Instagram Graph API /me/subscribed_apps
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me/subscribed_apps?${params.toString()}`,
+    // 4. Facebook Graph API (standard endpoint for subscribed_apps)
+    `https://graph.facebook.com/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params.toString()}`,
   ];
 
   let lastError: Error | null = null;
@@ -283,7 +293,11 @@ export async function subscribeInstagramWebhooks(
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
       });
 
       let response: { success?: boolean; error?: { message?: string } };
@@ -294,6 +308,7 @@ export async function subscribeInstagramWebhooks(
       }
 
       if (res.ok && response.success === true) {
+        console.log("[ig-webhook-sub] Successfully subscribed on:", new URL(url).pathname);
         return;
       }
 
