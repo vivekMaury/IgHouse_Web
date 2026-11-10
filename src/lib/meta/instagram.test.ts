@@ -6,6 +6,7 @@ import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   getInstagramAuthUrl,
+  getInstagramProfile,
   getInstagramRedirectUri,
   refreshLongLivedToken,
   subscribeInstagramWebhooks,
@@ -182,7 +183,7 @@ describe("subscribeInstagramWebhooks", () => {
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(
-      "https://graph.instagram.com/v26.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
+      "https://graph.instagram.com/v22.0/ig-account/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks",
     );
     expect(options.method).toBe("POST");
     expect(new Headers(options.headers).get("Authorization")).toBe(
@@ -207,5 +208,60 @@ describe("subscribeInstagramWebhooks", () => {
     await expect(
       subscribeInstagramWebhooks("ig-account", "access-token"),
     ).rejects.toThrow("Missing permission");
+  });
+});
+
+describe("getInstagramProfile", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("fetches profile with id, username, and account_type from unversioned /me", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        id: "17841405822304911",
+        username: "testcreator",
+        account_type: "BUSINESS",
+        profile_picture_url: "https://example.com/pic.jpg",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await getInstagramProfile("valid-token");
+
+    expect(profile).toEqual({
+      id: "17841405822304911",
+      username: "testcreator",
+      account_type: "BUSINESS",
+      profile_picture_url: "https://example.com/pic.jpg",
+    });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const parsed = new URL(url);
+    expect(parsed.origin).toBe("https://graph.instagram.com");
+    expect(parsed.pathname).toBe("/me");
+    expect(parsed.searchParams.get("fields")).toBe("id,username,account_type,profile_picture_url");
+  });
+
+  it("falls back to user node when /me fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("Method not supported", { status: 400 }))
+      .mockResolvedValueOnce(new Response("Method not supported", { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "17841405822304911",
+          username: "directuser",
+          account_type: "MEDIA_CREATOR",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await getInstagramProfile("valid-token", "17841405822304911");
+
+    expect(profile.id).toBe("17841405822304911");
+    expect(profile.username).toBe("directuser");
+    expect(profile.account_type).toBe("MEDIA_CREATOR");
   });
 });

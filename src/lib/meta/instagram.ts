@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_OAUTH_BASE = "https://api.instagram.com";
 const INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com";
-const INSTAGRAM_GRAPH_VERSION = "v26.0";
+const INSTAGRAM_GRAPH_VERSION = "v22.0";
 
 const instagramOAuthStateSchema = z.object({
   state: z.string().regex(/^[a-f0-9]{64}$/),
@@ -273,27 +273,40 @@ export async function subscribeInstagramWebhooks(
 ): Promise<void> {
   const fields = ["messages", "messaging_postbacks"];
   const params = new URLSearchParams({ subscribed_fields: fields.join(",") });
-  const res = await fetch(
-    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
-  );
+  const urls = [
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params.toString()}`,
+    `${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(instagramAccountId)}/subscribed_apps?${params.toString()}`,
+  ];
 
-  let response: { success?: boolean; error?: { message?: string } };
-  try {
-    response = (await res.json()) as typeof response;
-  } catch {
-    throw new Error(`Instagram webhook subscription failed (HTTP ${res.status}).`);
+  let lastError: Error | null = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      let response: { success?: boolean; error?: { message?: string } };
+      try {
+        response = (await res.json()) as typeof response;
+      } catch {
+        continue;
+      }
+
+      if (res.ok && response.success === true) {
+        return;
+      }
+
+      const message = response.error?.message;
+      lastError = new Error(
+        `Instagram webhook subscription failed${message ? `: ${message}` : ` (HTTP ${res.status})`}`,
+      );
+    } catch (err) {
+      lastError = err as Error;
+    }
   }
 
-  if (!res.ok || response.success !== true) {
-    const message = response.error?.message;
-    throw new Error(
-      `Instagram webhook subscription failed${message ? `: ${message}` : ` (HTTP ${res.status})`}`,
-    );
-  }
+  if (lastError) throw lastError;
 }
 
 export async function fetchIgUserProfile(
@@ -329,37 +342,90 @@ export async function fetchIgUserProfile(
 
 export async function getInstagramProfile(
   token: string,
+  userId?: string,
 ): Promise<{
   id: string;
   username: string;
   account_type?: string;
   profile_picture_url?: string;
 }> {
+  // Use official Instagram User Graph fields (id, username, account_type, profile_picture_url)
+  const fields = "id,username,account_type,profile_picture_url";
   const params = new URLSearchParams({
-    fields: "user_id,username,account_type,profile_picture_url",
+    fields,
     access_token: token,
   });
 
-  const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`);
+  const urlsToTry: string[] = [
+    // 1. Unversioned /me (official Instagram Login endpoint)
+    `${INSTAGRAM_GRAPH_BASE}/me?${params.toString()}`,
+    // 2. Versioned /me (current active Meta Graph API version)
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`,
+  ];
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
+  if (userId) {
+    // 3. Direct user node unversioned
+    urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(userId)}?${params.toString()}`);
+    // 4. Direct user node versioned
+    urlsToTry.push(
+      `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params.toString()}`,
+    );
   }
 
-  const data = z.object({
-    user_id: z.union([z.string(), z.number()]),
-    username: z.string().min(1),
-    account_type: z.string().optional(),
-    profile_picture_url: z.string().optional(),
-  }).parse(await res.json());
+  let lastError: Error | null = null;
 
-  return {
-    id: String(data.user_id),
-    username: data.username,
-    account_type: data.account_type,
-    profile_picture_url: data.profile_picture_url,
-  };
+  for (const url of urlsToTry) {
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      if (!res.ok) {
+        console.warn(`[ig-profile] Profile fetch failed on ${new URL(url).pathname} (${res.status}):`, text);
+        lastError = new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
+        continue;
+      }
+
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        lastError = new Error(`Instagram profile returned invalid JSON (HTTP ${res.status}).`);
+        continue;
+      }
+
+      const parsed = z
+        .object({
+          id: z.union([z.string(), z.number()]).optional(),
+          user_id: z.union([z.string(), z.number()]).optional(),
+          username: z.string().min(1).optional(),
+          account_type: z.string().optional(),
+          profile_picture_url: z.string().optional(),
+        })
+        .safeParse(json);
+
+      if (!parsed.success) {
+        lastError = new Error(`Instagram profile response validation failed: ${parsed.error.message}`);
+        continue;
+      }
+
+      const data = parsed.data;
+      const profileId = String(data.id ?? data.user_id ?? userId ?? "");
+      if (!profileId) {
+        lastError = new Error("Instagram profile missing id");
+        continue;
+      }
+
+      return {
+        id: profileId,
+        username: data.username ?? (profileId ? `ig_${profileId.slice(-6)}` : "unknown"),
+        account_type: data.account_type,
+        profile_picture_url: data.profile_picture_url,
+      };
+    } catch (fetchErr) {
+      lastError = fetchErr as Error;
+    }
+  }
+
+  throw lastError ?? new Error("Instagram profile fetch failed across all attempted endpoints.");
 }
 
 export async function checkIsFollower(

@@ -154,11 +154,11 @@ export async function GET(request: Request) {
   }
 
   // ── Fetch Instagram profile & validate account type ──
-  let igBusinessAccountId: string;
-  let username = "unknown";
+  let igBusinessAccountId: string = igUserId;
+  let username = `user_${igUserId.slice(-6)}`;
   let avatarUrl: string | null = null;
   try {
-    const profile = await getInstagramProfile(longToken);
+    const profile = await getInstagramProfile(longToken, igUserId);
     igBusinessAccountId = profile.id;
     username = profile.username;
     avatarUrl = profile.profile_picture_url ?? null;
@@ -172,8 +172,13 @@ export async function GET(request: Request) {
       return redirectForError("personal_account");
     }
   } catch (err) {
-    console.error("[ig-callback] Profile fetch failed:", (err as Error).message);
-    return redirectForError("profile_fetch_failed");
+    console.warn(
+      "[ig-callback] Profile fetch failed, continuing with token IG user ID:",
+      (err as Error).message,
+    );
+    if (!igBusinessAccountId) {
+      return redirectForError("profile_fetch_failed");
+    }
   }
 
   if (!igBusinessAccountId) {
