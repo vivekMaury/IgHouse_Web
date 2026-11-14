@@ -1,5 +1,5 @@
-IgInbox — Product Requirements Document v3.0 (Fresh Start)
-Version 3.0 · Rebuild from scratch · Builder: you + Claude Code in VS Code · Updated October 19, 2026
+IgInbox — Product Requirements Document v3.2
+Version 3.2 · Product scope and implementation status · Updated November 14, 2026
 1. What Changed From v2.0
 Your v2.0 document describes a finished build with every milestone marked complete. For a fresh start you need a build plan instead, so v3.0 is organized around what to build first, what to defer, and how to work with Claude step by step.
 Added in v3.0
@@ -13,6 +13,18 @@ Fixed from v2.0
 •	The Delay node had no durable mechanism. v3.0 uses scheduled jobs so a 2-hour delay survives restarts and deploys.
 •	No place to store where a contact is inside a flow. v3.0 adds flow_runs so Wait-for-Reply, delays and human takeover work correctly.
 •	Vercel Cron frequency depends on your plan, so a cron-only worker can be too slow. v3.0 uses a managed queue/job runner for execution.
+Updates in v3.2
+•	Added a repository-based implementation snapshot so existing code is not confused with roadmap commitments or production readiness.
+•	Documented the Instagram Login integration, Meta API library capabilities, webhook handling, and Inngest job runner currently present in the repository.
+•	Updated the architecture choices to reflect the locked Inngest decision and recorded the Meta API version alignment check still needed before release.
+Current implementation snapshot (repository status, not a production-readiness claim)
+Area	Status in the repository
+Meta / Instagram integration	Instagram Login OAuth and token exchange/refresh; AES-256-GCM token storage; profile and follower lookup; webhook subscription; message/comment/private-reply send helpers; webhook signature verification and event parsing; conversation history sync.
+Webhook processing	Instagram webhook events are deduplicated and stored in Supabase, then processed through Inngest functions with retries. Supported parsing includes messages, postbacks, comments, story replies, and mentions.
+Product surfaces	Supabase sign-in/sign-up, workspace-backed dashboard, flow list/canvas, Instagram connection settings, inbox and conversation actions, contacts, automation logs, and account data deletion.
+Flow capabilities	The flow schema/canvas covers triggers, messages, conditions, delays, lead capture, wait-for-reply, HTTP request, and AI reply nodes. A node being represented in the schema or canvas does not imply every runtime, safety, and UX requirement is complete.
+Still roadmap / not evidenced as complete	Billing and usage enforcement, analytics rollups, templates/onboarding, notifications, broadcasts, API keys, and a production-ready AI knowledge-base experience remain planned. See Sections 4 and 5 for their phase.
+Treat this inventory as code present in the repository, not a claim that a feature is deployed, fully tested end-to-end, approved by Meta, or ready for customer use. Keep the P0/P1/P2 roadmap as the source for outstanding product requirements.
 2. Vision and Goals
 Vision: IgInbox turns Instagram comments, story mentions and DMs into automated, compliant sales funnels, with a visual builder and a shared inbox where humans can step in at any time.
 Goals
@@ -40,10 +52,13 @@ P2 — Differentiate (weeks 11+)	AI Setter agent, broadcasts, A/B split, flow ve
 •	Invite by email with expiring token (P1).
 •	Acceptance: a user in workspace A can never read or write workspace B data, verified by automated RLS tests.
 5.2 Instagram Connection (P0)
-•	OAuth connect flow using Meta's official Instagram messaging APIs (check current docs for whether to use Instagram Login or Facebook Login; Instagram Login removes the need for a linked Facebook Page).
-•	Store the long-lived token encrypted (AES-256-GCM), with a scheduled refresh job before expiry (about 60 days).
-•	Webhook subscriptions: comments, messages, story mentions, message reactions and seen receipts as needed.
-•	Show connection health: token expiry, last webhook received, permission status. Alert the user by email if the token is about to fail.
+•	Use Meta's official Instagram API with Instagram Login; request the minimum scopes required (`instagram_business_basic`, `instagram_business_manage_messages`, `instagram_business_manage_comments`). A linked Facebook Page is not a product requirement for this login path.
+•	Exchange the OAuth code for a short-lived token, exchange for a long-lived token, and refresh it before expiry. Encrypt stored tokens with AES-256-GCM, a unique IV, and `key_version`.
+•	The `src/lib/meta/` integration library owns OAuth state encoding/decoding, token exchange and refresh, profile/follower lookup, webhook subscription, message sending, event parsing/signature verification, retry support, and conversation-history reads. Keep API calls and response validation in this server-only integration layer.
+•	Send helpers cover Instagram DMs, public comment replies, and private replies to comments. Apply Meta messaging-window, private-reply, opt-out, and bot-paused checks in the execution path before sending; helper availability alone does not bypass those checks.
+•	The webhook endpoint verifies `X-Hub-Signature-256` against the raw body, parses supported Instagram events, persists deduplicated events, and dispatches processing to Inngest.
+•	Current code pins different Graph API versions in different Meta modules (including v22.0 and v26.0). Before release, verify supported versions against current Meta documentation, align or intentionally document versioning, and cover the selected endpoints with integration tests.
+•	Show connection health (token expiry, last webhook received, permission status) and alert the user before token failure; treat email alerting and full health visibility as remaining work unless verified in the product.
 5.3 Visual Flow Builder (P0)
 Built with @xyflow/react. Flow JSON is stored in flow_versions (see 6.3).
 Node	Purpose	Phase
@@ -111,7 +126,7 @@ Canvas	@xyflow/react	Industry standard node editor
 State/data	TanStack Query, Zustand (canvas only), Zod for all validation	Typed and predictable
 Database/Auth	Supabase Postgres, RLS, Auth, Realtime, Storage	One platform, RLS for tenancy
 ORM/migrations	Supabase CLI migrations (SQL) + generated types	SQL stays the source of truth
-Queue / jobs	Upstash QStash, Inngest or Trigger.dev (pick one)	Retries, delays, scheduling and dead-letter handling built in
+Queue / jobs	Inngest	Durable webhook processing, retries, concurrency limits, and scheduled/wait steps
 Cache / rate limit	Upstash Redis	Edge-friendly rate limiting and dedupe
 Payments	Stripe + Razorpay	Global + India
 Email	Resend (or Postmark)	Transactional email
@@ -119,7 +134,7 @@ Observability	Sentry, Vercel Analytics, structured logs, Better Stack or similar
 Testing	Vitest, Playwright, pgTAP or SQL tests for RLS	Protect the engine and tenancy
 CI/CD	GitHub Actions + Vercel previews	Every PR gets a preview URL
 AI	Anthropic API (Claude)	AI Setter, flow suggestions
-Versions move quickly. Before installing, check the current stable versions of Next.js, React Flow, Supabase and the Meta Graph API instead of pinning to the numbers in v2.0 (Next.js 14, Graph API v21).
+Current implementation uses Next.js 16.4.2, React 19, @xyflow/react 12, Supabase, and Inngest. Keep dependency versions aligned with the lockfile. Meta Graph API versions are currently inconsistent across modules; verify supported versions against Meta's official documentation and align them before release rather than copying the old v2.0 Graph API v21 reference.
 6.2 Event Pipeline
 Meta webhook POST
   -> verify X-Hub-Signature-256 (raw body, timing-safe compare)
@@ -536,7 +551,7 @@ Customer accounts get restricted for spam	Humanized delays, send caps, opt-out, 
 Token expiry silently breaks flows	Refresh job, health dashboard, email alerts
 Solo-builder scope creep	Strict P0 / P1 / P2 phasing; ship P0 to 5 beta users first
 Competitor pricing pressure	Differentiate with AI Setter, agency tools and India-first pricing and payments
-## 13. Locked Architectural Decisions (v3.1)
+## 13. Locked Architectural Decisions (v3.2)
 1. **Instagram Auth Flow:** Use **Instagram API with Instagram Login** (`instagram_business_basic`, `instagram_business_manage_messages`, `instagram_business_manage_comments`). Do NOT require Facebook Page linking for P0.
 2. **Queue & Durable Execution:** Locked to **Inngest** (handles durable `step.sleep` for Delay nodes, retries, and `step.waitForEvent` for Wait-for-Reply timeouts out of the box).
 3. **Media & Post Picker:** 
