@@ -328,32 +328,55 @@ export async function subscribeInstagramWebhooks(
 export async function fetchIgUserProfile(
   userId: string,
   accessToken: string,
-): Promise<{ name?: string; username?: string; profile_pic?: string }> {
-  const params = new URLSearchParams({
-    fields: "name,username,profile_picture_url",
-    access_token: accessToken,
-  });
+): Promise<{ name?: string; username?: string; profile_pic?: string; is_follower?: boolean }> {
+  // On an IGSID (Instagram Scoped ID), the profile picture field is profile_pic (NOT profile_picture_url)
+  const fieldSets = [
+    "name,username,profile_pic,is_user_follow_business",
+    "name,username,profile_pic",
+    "username,profile_pic",
+    "name,username",
+    "username",
+  ];
 
-  const res = await fetch(
-    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params}`,
-  );
+  let lastError: Error | null = null;
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`IG user profile fetch failed for ${userId}: ${res.status} ${text}`);
+  for (const fields of fieldSets) {
+    const urls = [
+      `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
+      `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
+      `${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(userId)}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const text = await res.text();
+          lastError = new Error(`IG user profile fetch failed for ${userId}: ${res.status} ${text}`);
+          continue;
+        }
+
+        const json = (await res.json()) as {
+          name?: string;
+          username?: string;
+          profile_pic?: string;
+          profile_picture_url?: string;
+          is_user_follow_business?: boolean;
+        };
+
+        return {
+          name: json.name,
+          username: json.username,
+          profile_pic: json.profile_pic ?? json.profile_picture_url,
+          is_follower: json.is_user_follow_business,
+        };
+      } catch (err) {
+        lastError = err as Error;
+      }
+    }
   }
 
-  const profile = z.object({
-    name: z.string().optional(),
-    username: z.string().optional(),
-    profile_picture_url: z.string().optional(),
-  }).parse(await res.json());
-
-  return {
-    name: profile.name,
-    username: profile.username,
-    profile_pic: profile.profile_picture_url,
-  };
+  throw lastError ?? new Error(`IG user profile fetch failed for ${userId}`);
 }
 
 export async function getInstagramProfile(
@@ -459,28 +482,29 @@ export async function getInstagramProfile(
 export async function checkIsFollower(
   targetUserId: string,
   accessToken: string,
-  maxPages = 20,
+  _maxPages?: number,
 ): Promise<boolean> {
-  let url: string | null =
-    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me/followers?access_token=${encodeURIComponent(accessToken)}&limit=25`;
+  const urls = [
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
+    `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
+    `${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
+  ];
 
-  for (let page = 0; page < maxPages && url; page++) {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`[ig:followers] API returned ${res.status}, defaulting to false`);
-      return false;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+
+      const body = (await res.json()) as {
+        is_user_follow_business?: boolean;
+      };
+
+      if (typeof body.is_user_follow_business === "boolean") {
+        return body.is_user_follow_business;
+      }
+    } catch {
+      // Continue to next candidate URL
     }
-
-    const body = (await res.json()) as {
-      data: Array<{ id: string; username?: string }>;
-      paging?: { next?: string };
-    };
-
-    if (body.data.some((u) => u.id === targetUserId)) {
-      return true;
-    }
-
-    url = body.paging?.next ?? null;
   }
 
   return false;
