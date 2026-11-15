@@ -1,5 +1,5 @@
 IgInbox — Product Requirements Document
-Version 3.2 · Product scope and implementation status · Updated November 14, 2026
+Version 3.3 · Product scope and implementation status · Updated November 15, 2026
 1. What Changed From v2.0
 Your v2.0 document describes a finished build with every milestone marked complete. For a fresh start you need a build plan instead, so v3.0 is organized around what to build first, what to defer, and how to work with Claude step by step.
 Added in v3.0
@@ -17,6 +17,11 @@ Updates in v3.2
 •	Added a repository-based implementation snapshot so existing code is not confused with roadmap commitments or production readiness.
 •	Documented the Instagram Login integration, Meta API library capabilities, webhook handling, and Inngest job runner currently present in the repository.
 •	Updated the architecture choices to reflect the locked Inngest decision and recorded the Meta API version alignment check still needed before release.
+Updates in v3.3
+•	Webhook Auto-Healing & Account Resolution: Incoming Meta webhooks deliver 17-digit Instagram Business Account IDs (e.g. 17841...). The webhook pipeline now automatically resolves ID discrepancies, updates `platform_account_id`, reactivates the account (`is_active: true`), and synchronizes real handles without dropping inbound messages.
+•	Multi-Secret Webhook Verification: Signature validation checks both `META_APP_SECRET` and `INSTAGRAM_CLIENT_SECRET`, sanitizes quotes/whitespace, operates on raw wire byte buffers, and supports both `sha256` and `sha1` signatures.
+•	IGSID Sender Profile & Follower Verification: Corrected sender profile enrichment to query `profile_pic` on IGSID nodes (preventing Meta 400 errors from `profile_picture_url`) with layered field fallbacks. Follower checks now query the native `is_user_follow_business` field on the sender node rather than unsupported `/me/followers` list endpoints.
+•	Unified Meta Graph API Version: Standardized Graph API calls across all modules (`instagram.ts`, `conversations.ts`, `send.ts`, `webhook-verify.ts`) to `v22.0`.
 Current implementation snapshot (repository status, not a production-readiness claim)
 Area	Status in the repository
 Meta / Instagram integration	Instagram Login OAuth and token exchange/refresh; AES-256-GCM token storage; profile and follower lookup; webhook subscription; message/comment/private-reply send helpers; webhook signature verification and event parsing; conversation history sync.
@@ -53,11 +58,13 @@ P2 — Differentiate (weeks 11+)	AI Setter agent, broadcasts, A/B split, flow ve
 •	Acceptance: a user in workspace A can never read or write workspace B data, verified by automated RLS tests.
 5.2 Instagram Connection (P0)
 •	Use Meta's official Instagram API with Instagram Login; request the minimum scopes required (`instagram_business_basic`, `instagram_business_manage_messages`, `instagram_business_manage_comments`). A linked Facebook Page is not a product requirement for this login path.
-•	Exchange the OAuth code for a short-lived token, exchange for a long-lived token, and refresh it before expiry. Encrypt stored tokens with AES-256-GCM, a unique IV, and `key_version`.
+•	Exchange the OAuth code for a short-lived token, exchange for a long-lived token (60-day validity window), and refresh it before expiry. Encrypt stored tokens with AES-256-GCM, a unique IV, and `key_version`.
 •	The `src/lib/meta/` integration library owns OAuth state encoding/decoding, token exchange and refresh, profile/follower lookup, webhook subscription, message sending, event parsing/signature verification, retry support, and conversation-history reads. Keep API calls and response validation in this server-only integration layer.
+•	Graph API versions are unified and pinned to `v22.0` across all Meta integration modules (`instagram.ts`, `conversations.ts`, `send.ts`).
 •	Send helpers cover Instagram DMs, public comment replies, and private replies to comments. Apply Meta messaging-window, private-reply, opt-out, and bot-paused checks in the execution path before sending; helper availability alone does not bypass those checks.
-•	The webhook endpoint verifies `X-Hub-Signature-256` against the raw body, parses supported Instagram events, persists deduplicated events, and dispatches processing to Inngest.
-•	Current code pins different Graph API versions in different Meta modules (including v22.0 and v26.0). Before release, verify supported versions against current Meta documentation, align or intentionally document versioning, and cover the selected endpoints with integration tests.
+•	Webhook Signature Verification: Verifies incoming payloads against the raw byte buffer using timing-safe comparisons, evaluating candidate secrets (`META_APP_SECRET` and `INSTAGRAM_CLIENT_SECRET`) with whitespace/quote sanitization, and supporting both `sha256` and `sha1` headers.
+•	Webhook Account Auto-Healing: Incoming Meta webhooks deliver Instagram Business Account IDs (e.g., `17841...`). The pipeline automatically resolves ID discrepancies, updates `platform_account_id` in `connected_accounts`, reactivates the account (`is_active: true`), and synchronizes real usernames without dropping inbound events.
+•	IGSID Profile Enrichment & Follower Status: Profile enrichment on sender IGSID nodes utilizes the official `profile_pic` field (preventing Meta 400 errors from `profile_picture_url`) with layered field fallbacks. Follower condition checks query `is_user_follow_business` directly on the sender node, avoiding non-existent `/me/followers` list endpoints.
 •	Show connection health (token expiry, last webhook received, permission status) and alert the user before token failure; treat email alerting and full health visibility as remaining work unless verified in the product.
 5.3 Visual Flow Builder (P0)
 Built with @xyflow/react. Flow JSON is stored in flow_versions (see 6.3).
@@ -134,16 +141,17 @@ Observability	Sentry, Vercel Analytics, structured logs, Better Stack or similar
 Testing	Vitest, Playwright, pgTAP or SQL tests for RLS	Protect the engine and tenancy
 CI/CD	GitHub Actions + Vercel previews	Every PR gets a preview URL
 AI	Anthropic API (Claude)	AI Setter, flow suggestions
-Current implementation uses Next.js 16.4.2, React 19, @xyflow/react 12, Supabase, and Inngest. Keep dependency versions aligned with the lockfile. Meta Graph API versions are currently inconsistent across modules; verify supported versions against Meta's official documentation and align them before release rather than copying the old v2.0 Graph API v21 reference.
+Current implementation uses Next.js 16.4.2, React 19, @xyflow/react 12, Supabase, and Inngest. Keep dependency versions aligned with the lockfile. Meta Graph API versions are unified and pinned to v22.0 across all integration modules.
 6.2 Event Pipeline
 Meta webhook POST
-  -> verify X-Hub-Signature-256 (raw body, timing-safe compare)
+  -> verify X-Hub-Signature-256 / X-Hub-Signature against raw byte buffer with multi-secret evaluation (META_APP_SECRET, INSTAGRAM_CLIENT_SECRET)
+  -> resolve workspace + connected account with auto-healing (maps incoming IGBA 17841... to account)
   -> INSERT into webhook_events (unique platform_event_id, status=received)
   -> publish job to queue
   -> return 200 (under 200 ms)
 
 Queue worker (retries + backoff + dead-letter)
-  -> load event, resolve workspace + connected account
+  -> load event, resolve workspace + connected account (with auto-healing fallback)
   -> dedupe + rate limit + opt-out + bot_paused checks
   -> run engine step(run, event)
   -> call Meta API with decrypted token
@@ -173,7 +181,7 @@ Secrets and encryption
 •	Environment variables validated at boot with Zod. .env* in .gitignore; enable GitHub secret scanning and push protection.
 •	Never log tokens, message bodies in full, or payment details. Add a log scrubber.
 Webhook and API hardening
-•	Verify signatures against the raw request body using a timing-safe comparison; reject if missing.
+•	Verify signatures against the raw wire byte buffer using timingSafeEqual, checking both META_APP_SECRET and INSTAGRAM_CLIENT_SECRET with whitespace and quote sanitization; support both sha256 and legacy sha1 headers. Reject if missing or mismatched.
 •	Verify tokens for the GET challenge are long random values.
 •	Rate limit all public endpoints and auth routes (Upstash Ratelimit).
 •	Zod validation on all inputs; return generic errors.
