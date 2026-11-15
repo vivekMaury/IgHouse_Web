@@ -565,3 +565,71 @@ describe("Engine step() — AI Reply node", () => {
     }
   });
 });
+
+describe("Engine step() — Follower condition with username interpolation", () => {
+  const followerCheckFlow: FlowDefinition = {
+    nodes: [
+      { id: "trigger-1", data: { type: "trigger", triggerType: "dm_keyword", cooldownHours: 0 } },
+      { id: "condition-1", data: { type: "condition", field: "is_follower", operator: "exists" } },
+      { id: "msg-yes", data: { type: "message", messageType: "dm", text: "Hello! {{username}}, Hii, How are you..." } },
+      { id: "msg-no", data: { type: "message", messageType: "dm", text: "Hello! {{username}}, Pls follow me first." } },
+    ],
+    edges: [
+      { id: "e1", source: "trigger-1", target: "condition-1" },
+      { id: "e2", source: "condition-1", target: "msg-yes", sourceHandle: "true" },
+      { id: "e3", source: "condition-1", target: "msg-no", sourceHandle: "false" },
+    ],
+  };
+
+  it("branches to 'Yes' handle and interpolates {{username}} when isFollower is true", () => {
+    const run = makeRun({
+      context: {
+        variables: { username: "johndoe_official" },
+        capturedFields: {},
+        privateReplySent: {},
+        tags: [],
+      },
+    });
+    const incoming: IncomingEvent = {
+      type: "message",
+      text: "Hii",
+      senderId: "12345",
+      isFollower: true,
+    };
+
+    const result = step(run, incoming, followerCheckFlow);
+    const dmAction = result.actions.find((a) => a.type === "send_dm");
+    expect(dmAction).toBeDefined();
+    if (dmAction?.type === "send_dm") {
+      expect(dmAction.text).toBe("Hello! johndoe_official, Hii, How are you...");
+    }
+    expect(result.nextState.status).toBe("completed");
+    expect(result.nextState.currentNodeId).toBeNull();
+  });
+
+  it("branches to 'No' handle and interpolates {{username}} when isFollower is false", () => {
+    const run = makeRun({
+      context: {
+        variables: { username: "johndoe_official" },
+        capturedFields: {},
+        privateReplySent: {},
+        tags: [],
+      },
+    });
+    const incoming: IncomingEvent = {
+      type: "message",
+      text: "Hii",
+      senderId: "12345",
+      isFollower: false,
+    };
+
+    const result = step(run, incoming, followerCheckFlow);
+    const dmAction = result.actions.find((a) => a.type === "send_dm");
+    expect(dmAction).toBeDefined();
+    if (dmAction?.type === "send_dm") {
+      expect(dmAction.text).toBe("Hello! johndoe_official, Pls follow me first.");
+    }
+    expect(result.nextState.status).toBe("completed");
+    expect(result.nextState.currentNodeId).toBeNull();
+  });
+});

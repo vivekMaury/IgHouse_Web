@@ -361,14 +361,25 @@ export async function fetchIgUserProfile(
           username?: string;
           profile_pic?: string;
           profile_picture_url?: string;
-          is_user_follow_business?: boolean;
+          is_user_follow_business?: boolean | string | number;
         };
+
+        const isFollower =
+          typeof json.is_user_follow_business === "boolean"
+            ? json.is_user_follow_business
+            : json.is_user_follow_business === "true" || (json.is_user_follow_business as unknown) === 1
+              ? true
+              : json.is_user_follow_business === "false" || (json.is_user_follow_business as unknown) === 0
+                ? false
+                : undefined;
+
+        console.log(`[ig:user-profile] Profile for sender ${userId}: username=${json.username} name=${json.name} isFollower=${isFollower}`);
 
         return {
           name: json.name,
           username: json.username,
           profile_pic: json.profile_pic ?? json.profile_picture_url,
-          is_follower: json.is_user_follow_business,
+          is_follower: isFollower,
         };
       } catch (err) {
         lastError = err as Error;
@@ -485,25 +496,37 @@ export async function checkIsFollower(
   _maxPages?: number,
 ): Promise<boolean> {
   const urls = [
-    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
-    `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
+    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business,is_business_follow_user&access_token=${encodeURIComponent(accessToken)}`,
+    `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business,is_business_follow_user&access_token=${encodeURIComponent(accessToken)}`,
     `${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(targetUserId)}?fields=is_user_follow_business&access_token=${encodeURIComponent(accessToken)}`,
   ];
 
   for (const url of urls) {
     try {
       const res = await fetch(url);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[ig:followers] ${new URL(url).pathname} returned ${res.status}: ${errText}`);
+        continue;
+      }
 
       const body = (await res.json()) as {
-        is_user_follow_business?: boolean;
+        is_user_follow_business?: boolean | string | number;
       };
+
+      console.log(`[ig:followers] Result for sender ${targetUserId}:`, body);
 
       if (typeof body.is_user_follow_business === "boolean") {
         return body.is_user_follow_business;
       }
-    } catch {
-      // Continue to next candidate URL
+      if (body.is_user_follow_business === "true" || (body.is_user_follow_business as unknown) === 1) {
+        return true;
+      }
+      if (body.is_user_follow_business === "false" || (body.is_user_follow_business as unknown) === 0) {
+        return false;
+      }
+    } catch (err) {
+      console.warn(`[ig:followers] Fetch error for ${targetUserId}:`, (err as Error).message);
     }
   }
 

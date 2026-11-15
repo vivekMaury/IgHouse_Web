@@ -4,6 +4,7 @@ import { decryptToken } from "@/lib/crypto/token";
 import { step as engineStep, type FlowRunState, type IncomingEvent, type Action } from "@/lib/engine/step";
 import { matchFlows, type MatchableEvent } from "@/lib/engine/match";
 import { executeAction, type SendContext } from "@/lib/meta/send";
+import { checkIsFollower } from "@/lib/meta/instagram";
 import type { FlowDefinition } from "@/lib/engine/schema";
 
 type WebhookEventData = {
@@ -29,7 +30,7 @@ function buildMatchableEvent(eventType: string, payload: Record<string, unknown>
 function buildIncomingEvent(
   eventType: string,
   payload: Record<string, unknown>,
-  contact: { email?: string; phone?: string; tags: string[] },
+  contact: { email?: string; phone?: string; tags: string[]; isFollower?: boolean },
 ): IncomingEvent {
   const message = payload.message as Record<string, unknown> | undefined;
   const change = payload as Record<string, unknown>;
@@ -43,6 +44,7 @@ function buildIncomingEvent(
     contactEmail: contact.email,
     contactPhone: contact.phone,
     contactTags: contact.tags,
+    isFollower: contact.isFollower,
   };
 }
 
@@ -293,7 +295,7 @@ export const processWebhookEvent = inngest.createFunction(
           { workspace_id: account.workspace_id, platform_scoped_id: senderId } as Record<string, unknown>,
           { onConflict: "workspace_id,platform_scoped_id" },
         )
-        .select("id, opted_out, email, phone")
+        .select("id, opted_out, email, phone, username, full_name")
         .single();
 
       if (contactErr) {
@@ -302,7 +304,14 @@ export const processWebhookEvent = inngest.createFunction(
         console.log(`[inngest] Contact upserted: id=${(data as Record<string, unknown>)?.id} sender=${senderId}`);
       }
 
-      return data as { id: string; opted_out: boolean; email: string | null; phone: string | null } | null;
+      return data as {
+        id: string;
+        opted_out: boolean;
+        email: string | null;
+        phone: string | null;
+        username: string | null;
+        full_name: string | null;
+      } | null;
     });
 
     if (!contact || contact.opted_out) {
@@ -393,6 +402,17 @@ export const processWebhookEvent = inngest.createFunction(
       return { skipped: true, reason: "bot paused" };
     }
 
+    // 5b. Check follower status for condition nodes
+    const isFollower = await step.run("check-is-follower", async () => {
+      try {
+        const token = await getDecryptedToken(supabase, account.id);
+        return await checkIsFollower(senderId, token);
+      } catch (err) {
+        console.warn("[inngest] Follower check failed, defaulting to false:", (err as Error).message);
+        return false;
+      }
+    });
+
     // 6. Check for existing waiting flow run (lead capture / wait-for-reply)
     const waitingRun = await step.run("check-waiting-run", async () => {
       const { data } = await supabase
@@ -428,6 +448,10 @@ export const processWebhookEvent = inngest.createFunction(
         const flowDef = (versionData as { definition: unknown }).definition as FlowDefinition;
         const contactTags = await getContactTags(supabase, contact.id);
 
+        const initialVars = { ...((waitingRun.context.variables as Record<string, string>) ?? {}) };
+        if (contact.username && !initialVars.username) initialVars.username = contact.username;
+        if (contact.full_name && !initialVars.name) initialVars.name = contact.full_name;
+
         const runState: FlowRunState = {
           id: waitingRun.id,
           flowId: waitingRun.flow_id,
@@ -435,7 +459,7 @@ export const processWebhookEvent = inngest.createFunction(
           currentNodeId: waitingRun.current_node_id,
           status: "running",
           context: {
-            variables: (waitingRun.context.variables as Record<string, string>) ?? {},
+            variables: initialVars,
             capturedFields: (waitingRun.context.capturedFields as Record<string, string>) ?? {},
             privateReplySent: (waitingRun.context.privateReplySent as Record<string, boolean>) ?? {},
             tags: (waitingRun.context.tags as string[]) ?? [],
@@ -446,6 +470,7 @@ export const processWebhookEvent = inngest.createFunction(
           email: contact.email ?? undefined,
           phone: contact.phone ?? undefined,
           tags: contactTags,
+          isFollower,
         });
 
         const result = engineStep(runState, incomingEvent, flowDef);
@@ -626,6 +651,10 @@ export const processWebhookEvent = inngest.createFunction(
       const flowRunId = await step.run(`create-flow-run-${match.flowId}`, async () => {
         const contactTags = await getContactTags(supabase, contact.id);
 
+        const initialVariables: Record<string, string> = {};
+        if (contact.username) initialVariables.username = contact.username;
+        if (contact.full_name) initialVariables.name = contact.full_name;
+
         const initialState: FlowRunState = {
           id: "",
           flowId: match.flowId,
@@ -633,7 +662,7 @@ export const processWebhookEvent = inngest.createFunction(
           currentNodeId: null,
           status: "running",
           context: {
-            variables: {},
+            variables: initialVariables,
             capturedFields: {},
             privateReplySent: {},
             tags: contactTags,
@@ -644,6 +673,7 @@ export const processWebhookEvent = inngest.createFunction(
           email: contact.email ?? undefined,
           phone: contact.phone ?? undefined,
           tags: contactTags,
+          isFollower,
         });
 
         const result = engineStep(initialState, incomingEvent, match.definition);

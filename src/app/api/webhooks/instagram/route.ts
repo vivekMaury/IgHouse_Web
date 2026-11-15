@@ -34,6 +34,8 @@ type FlowContext = {
   contactId: string;
   contactEmail: string | null;
   contactPhone: string | null;
+  contactUsername?: string | null;
+  contactName?: string | null;
   senderId: string;
   eventType: string;
   payload: Record<string, unknown>;
@@ -121,13 +123,15 @@ async function runAutomationFlows(
   ctx: FlowContext,
 ) {
   // 0. Check follower status for condition nodes
-  let isFollower = false;
-  try {
-    isFollower = await checkIsFollower(ctx.senderId, ctx.accessToken);
-    console.log(`[webhook:flow] Follower check sender=${ctx.senderId} isFollower=${isFollower}`);
-  } catch (err) {
-    console.warn("[webhook:flow] Follower check failed, defaulting to false:", (err as Error).message);
+  let isFollower = ctx.isFollower ?? false;
+  if (ctx.isFollower === undefined) {
+    try {
+      isFollower = await checkIsFollower(ctx.senderId, ctx.accessToken);
+    } catch (err) {
+      console.warn("[webhook:flow] Follower check failed, defaulting to false:", (err as Error).message);
+    }
   }
+  console.log(`[webhook:flow] Follower check sender=${ctx.senderId} isFollower=${isFollower}`);
 
   // 1. Check for existing waiting flow run (lead capture / wait-for-reply)
   const { data: waitingRunRows } = await supabase
@@ -172,6 +176,10 @@ async function runAutomationFlows(
         console.log(`[webhook:flow] Resuming waiting flow run=${waitingRun.id} flow=${waitingRun.flow_id}`);
         const contactTags = await getContactTags(supabase, ctx.contactId);
 
+        const initialVars = { ...((waitingRun.context.variables as Record<string, string>) ?? {}) };
+        if (ctx.contactUsername && !initialVars.username) initialVars.username = ctx.contactUsername;
+        if (ctx.contactName && !initialVars.name) initialVars.name = ctx.contactName;
+
         const runState: FlowRunState = {
           id: waitingRun.id,
           flowId: waitingRun.flow_id,
@@ -179,7 +187,7 @@ async function runAutomationFlows(
           currentNodeId: waitingRun.current_node_id,
           status: "running",
           context: {
-            variables: (waitingRun.context.variables as Record<string, string>) ?? {},
+            variables: initialVars,
             capturedFields: (waitingRun.context.capturedFields as Record<string, string>) ?? {},
             privateReplySent: (waitingRun.context.privateReplySent as Record<string, boolean>) ?? {},
             tags: (waitingRun.context.tags as string[]) ?? [],
@@ -360,6 +368,10 @@ async function runAutomationFlows(
     // Run the engine with fresh isolated context
     const contactTags = await getContactTags(supabase, ctx.contactId);
 
+    const initialVariables: Record<string, string> = {};
+    if (ctx.contactUsername) initialVariables.username = ctx.contactUsername;
+    if (ctx.contactName) initialVariables.name = ctx.contactName;
+
     const initialState: FlowRunState = {
       id: "",
       flowId: match.flowId,
@@ -367,7 +379,7 @@ async function runAutomationFlows(
       currentNodeId: null,
       status: "running",
       context: {
-        variables: {},
+        variables: initialVariables,
         capturedFields: {},
         privateReplySent: {},
         tags: contactTags,
@@ -378,6 +390,7 @@ async function runAutomationFlows(
       email: ctx.contactEmail ?? undefined,
       phone: ctx.contactPhone ?? undefined,
       tags: contactTags,
+      isFollower,
     });
 
     const result = engineStep(initialState, incomingEvent, flow.definition);
@@ -817,7 +830,7 @@ async function handleMessageEvent(
       },
       { onConflict: "workspace_id,platform_scoped_id" }
     )
-    .select("id, opted_out, email, phone")
+    .select("id, opted_out, email, phone, username, full_name")
     .single();
 
   if (contactErr || !contact) {
@@ -825,7 +838,14 @@ async function handleMessageEvent(
     return;
   }
 
-  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+  const typedContact = contact as {
+    id: string;
+    opted_out: boolean;
+    email: string | null;
+    phone: string | null;
+    username: string | null;
+    full_name: string | null;
+  };
 
   if (typedContact.opted_out) {
     console.log("[webhook:sync] Contact opted out, skipping:", event.sender_id);
@@ -833,9 +853,17 @@ async function handleMessageEvent(
   }
 
   // 2b. Enrich contact with Instagram profile
+  let senderUsername: string | undefined = typedContact.username ?? undefined;
+  let senderName: string | undefined = typedContact.full_name ?? undefined;
+  let senderIsFollower: boolean | undefined;
+
   if (accessToken) {
     try {
       const profile = await fetchIgUserProfile(event.sender_id, accessToken);
+      if (profile.username) senderUsername = profile.username;
+      if (profile.name) senderName = profile.name;
+      if (profile.is_follower !== undefined) senderIsFollower = profile.is_follower;
+
       const updates: Record<string, unknown> = {};
       if (profile.username) updates.username = profile.username;
       if (profile.name) updates.full_name = profile.name;
@@ -934,6 +962,9 @@ async function handleMessageEvent(
         contactId: typedContact.id,
         contactEmail: typedContact.email,
         contactPhone: typedContact.phone,
+        contactUsername: senderUsername,
+        contactName: senderName,
+        isFollower: senderIsFollower,
         senderId: event.sender_id,
         eventType: event.event_type,
         payload: event.payload,
@@ -1081,6 +1112,7 @@ async function handleCommentEvent(
       contactId: typedContact.id,
       contactEmail: typedContact.email,
       contactPhone: typedContact.phone,
+      contactUsername: from.username,
       senderId: from.id,
       eventType: event.event_type,
       payload: event.payload,
@@ -1189,6 +1221,7 @@ async function handleStoryMentionEvent(
       contactId: typedContact.id,
       contactEmail: typedContact.email,
       contactPhone: typedContact.phone,
+      contactUsername: from.username,
       senderId: from.id,
       eventType: event.event_type,
       payload: event.payload,
@@ -1239,7 +1272,7 @@ async function handleStoryReplyEvent(
       { workspace_id, platform_scoped_id: event.sender_id },
       { onConflict: "workspace_id,platform_scoped_id" },
     )
-    .select("id, opted_out, email, phone")
+    .select("id, opted_out, email, phone, username, full_name")
     .single();
 
   if (contactErr || !contact) {
@@ -1247,7 +1280,14 @@ async function handleStoryReplyEvent(
     return;
   }
 
-  const typedContact = contact as { id: string; opted_out: boolean; email: string | null; phone: string | null };
+  const typedContact = contact as {
+    id: string;
+    opted_out: boolean;
+    email: string | null;
+    phone: string | null;
+    username: string | null;
+    full_name: string | null;
+  };
 
   if (typedContact.opted_out) {
     console.log("[webhook:story-reply] Contact opted out, skipping:", event.sender_id);
@@ -1255,9 +1295,17 @@ async function handleStoryReplyEvent(
   }
 
   // Enrich contact profile
+  let senderUsername: string | undefined = typedContact.username ?? undefined;
+  let senderName: string | undefined = typedContact.full_name ?? undefined;
+  let senderIsFollower: boolean | undefined;
+
   if (accessToken) {
     try {
       const profile = await fetchIgUserProfile(event.sender_id, accessToken);
+      if (profile.username) senderUsername = profile.username;
+      if (profile.name) senderName = profile.name;
+      if (profile.is_follower !== undefined) senderIsFollower = profile.is_follower;
+
       const updates: Record<string, unknown> = {};
       if (profile.username) updates.username = profile.username;
       if (profile.name) updates.full_name = profile.name;
@@ -1326,6 +1374,9 @@ async function handleStoryReplyEvent(
         contactId: typedContact.id,
         contactEmail: typedContact.email,
         contactPhone: typedContact.phone,
+        contactUsername: senderUsername,
+        contactName: senderName,
+        isFollower: senderIsFollower,
         senderId: event.sender_id,
         eventType: event.event_type,
         payload: event.payload,
