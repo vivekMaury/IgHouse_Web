@@ -53,6 +53,18 @@ describe("verifyWebhookSignature", () => {
     const sig = signPayload(body, "test_app_secret_123");
     expect(verifyWebhookSignature(buf, sig)).toBe(true);
   });
+
+  it("accepts a signature generated with INSTAGRAM_CLIENT_SECRET", () => {
+    const sig = signPayload(body, "test-ig-client-secret");
+    expect(verifyWebhookSignature(body, sig)).toBe(true);
+  });
+
+  it("handles whitespace and uppercase hex in signature header", () => {
+    const sig = signPayload(body, "test_app_secret_123");
+    const [algo, hash] = sig.split("=");
+    expect(hash).toBeDefined();
+    expect(verifyWebhookSignature(body, `  ${algo}=${hash!.toUpperCase()}  `)).toBe(true);
+  });
 });
 
 describe("verifyGetChallenge", () => {

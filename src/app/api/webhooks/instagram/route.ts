@@ -1198,11 +1198,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: rateLimitHeaders(rl.remaining, rl.reset) });
   }
 
-  const rawBody = await request.text();
-  const signature = request.headers.get("x-hub-signature-256");
+  const arrayBuffer = await request.arrayBuffer();
+  const rawBuffer = Buffer.from(arrayBuffer);
+  const rawBody = rawBuffer.toString("utf8");
+  const signature =
+    request.headers.get("x-hub-signature-256") ??
+    request.headers.get("x-hub-signature");
 
-  if (!verifyWebhookSignature(rawBody, signature)) {
-    console.error("[webhook] Signature verification failed. signature:", signature?.slice(0, 20) + "...");
+  if (!verifyWebhookSignature(rawBuffer, signature) && !verifyWebhookSignature(rawBody, signature)) {
+    console.error(
+      "[webhook] Signature verification failed. signature:",
+      signature ? `${signature.slice(0, 20)}...` : "null",
+      `bodyLength=${rawBuffer.length}`,
+    );
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
