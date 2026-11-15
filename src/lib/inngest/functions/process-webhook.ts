@@ -241,32 +241,46 @@ export const processWebhookEvent = inngest.createFunction(
 
       const rows = data ?? [];
       const row = rows[0] as { id: string; workspace_id: string; is_active: boolean; platform_account_id: string } | undefined;
-      if (!row) {
-        // Log all accounts to diagnose ID mismatches (e.g. precision loss)
+      let resolvedRow = row;
+      if (!resolvedRow) {
+        // Query stored accounts to heal any ID mismatch
         const { data: allAccounts } = await supabase
           .from("connected_accounts")
-          .select("platform_account_id, is_active")
+          .select("id, workspace_id, is_active, platform_account_id")
+          .eq("platform", "instagram")
+          .order("is_active", { ascending: false })
           .limit(10);
-        console.error(
-          `[inngest] No active account for igAccountId=${igAccountId}. ` +
-          `Stored accounts: ${JSON.stringify((allAccounts ?? []).map((a: Record<string, unknown>) => ({ id: a.platform_account_id, active: a.is_active })))}`,
-        );
 
-        await supabase
-          .from("webhook_events")
-          .update({ status: "failed", last_error: `No active account for igAccountId=${igAccountId}` } as Record<string, unknown>)
-          .eq("platform_event_id", webhookEventId);
-        return null;
+        if (allAccounts && allAccounts.length === 1) {
+          const target = allAccounts[0] as { id: string; workspace_id: string; is_active: boolean; platform_account_id: string };
+          console.log(`[inngest] Auto-healing single account id=${target.id}: updating platform_account_id from "${target.platform_account_id}" to "${igAccountId}"`);
+          await supabase
+            .from("connected_accounts")
+            .update({ platform_account_id: igAccountId, is_active: true } as Record<string, unknown>)
+            .eq("id", target.id);
+          resolvedRow = { ...target, platform_account_id: igAccountId, is_active: true };
+        } else {
+          console.error(
+            `[inngest] No active account for igAccountId=${igAccountId}. ` +
+            `Stored accounts: ${JSON.stringify((allAccounts ?? []).map((a: Record<string, unknown>) => ({ id: a.platform_account_id, active: a.is_active })))}`,
+          );
+
+          await supabase
+            .from("webhook_events")
+            .update({ status: "failed", last_error: `No active account for igAccountId=${igAccountId}` } as Record<string, unknown>)
+            .eq("platform_event_id", webhookEventId);
+          return null;
+        }
       }
 
-      console.log(`[inngest] Resolved account: id=${row.id} workspace=${row.workspace_id} platform_account_id=${row.platform_account_id}`);
+      console.log(`[inngest] Resolved account: id=${resolvedRow.id} workspace=${resolvedRow.workspace_id} platform_account_id=${resolvedRow.platform_account_id}`);
 
       await supabase
         .from("webhook_events")
-        .update({ workspace_id: row.workspace_id } as Record<string, unknown>)
+        .update({ workspace_id: resolvedRow.workspace_id } as Record<string, unknown>)
         .eq("platform_event_id", webhookEventId);
 
-      return row;
+      return resolvedRow;
     });
 
     if (!account) return { skipped: true, reason: "no active account" };

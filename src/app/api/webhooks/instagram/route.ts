@@ -3,7 +3,7 @@ import { verifyWebhookSignature, verifyGetChallenge } from "@/lib/meta/webhook-v
 import { parseWebhookPayload, type ParsedEvent, type WebhookPayload } from "@/lib/meta/parse-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { fetchIgUserProfile, checkIsFollower } from "@/lib/meta/instagram";
+import { fetchIgUserProfile, checkIsFollower, getInstagramProfile } from "@/lib/meta/instagram";
 import { decryptToken } from "@/lib/crypto/token";
 import { syncConversationHistory } from "@/lib/meta/sync-history";
 import { matchFlows, type MatchableEvent, type MatchResult } from "@/lib/engine/match";
@@ -594,6 +594,182 @@ async function recordOutboundMessages(
   }
 }
 
+type ResolvedConnectedAccount = {
+  id: string;
+  workspace_id: string;
+  platform_account_id: string;
+  encrypted_access_token: string;
+  token_iv: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  is_active: boolean;
+};
+
+async function getConnectedAccountForWebhook(
+  supabase: ReturnType<typeof createAdminClient>,
+  igAccountId: string,
+): Promise<ResolvedConnectedAccount | null> {
+  const cleanId = String(igAccountId).trim();
+
+  // 1. Direct match on platform_account_id
+  const { data: exactRows, error: exactErr } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv, username, avatar_url, is_active")
+    .eq("platform", "instagram")
+    .eq("platform_account_id", cleanId)
+    .limit(2);
+
+  if (exactErr) {
+    console.error("[webhook:account] DB error looking up connected account for ig_account_id:", cleanId, exactErr.message);
+  }
+
+  if (exactRows && exactRows.length > 0) {
+    const activeAccount = exactRows.find((r) => r.is_active) ?? exactRows[0];
+    if (!activeAccount) return null;
+    if (!activeAccount.is_active) {
+      console.log(`[webhook:account] Reactivating account ${activeAccount.id} due to incoming webhook`);
+      await supabase
+        .from("connected_accounts")
+        .update({ is_active: true, last_webhook_at: new Date().toISOString() })
+        .eq("id", activeAccount.id);
+    }
+    return activeAccount as unknown as ResolvedConnectedAccount;
+  }
+
+  // 2. Fallback / Auto-healing: query all Instagram accounts
+  const { data: allAccounts, error: allErr } = await supabase
+    .from("connected_accounts")
+    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv, username, avatar_url, is_active")
+    .eq("platform", "instagram")
+    .order("is_active", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(10);
+
+  if (allErr || !allAccounts || allAccounts.length === 0) {
+    console.warn("[webhook:account] No connected Instagram accounts found in database for incoming id:", cleanId);
+    return null;
+  }
+
+  console.log(
+    `[webhook:account] Unmatched incoming ig_account_id=${cleanId}. Found ${allAccounts.length} stored account(s):`,
+    allAccounts.map((a) => ({ id: a.id, platform_account_id: a.platform_account_id, active: a.is_active, username: a.username })),
+  );
+
+  // If there is only one Instagram account, heal its platform_account_id immediately
+  if (allAccounts.length === 1) {
+    const target = allAccounts[0];
+    if (!target) return null;
+    console.log(
+      `[webhook:account] Auto-healing single account id=${target.id}: updating platform_account_id from "${target.platform_account_id}" to "${cleanId}"`,
+    );
+
+    const updatePayload: Record<string, unknown> = {
+      platform_account_id: cleanId,
+      is_active: true,
+      last_webhook_at: new Date().toISOString(),
+    };
+
+    if (!target.username || target.username.startsWith("user_") || target.username.startsWith("ig_")) {
+      try {
+        const tokenHex = target.encrypted_access_token as string;
+        const ivHex = target.token_iv as string;
+        const token = decryptToken(
+          Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+          Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+        );
+        const profile = await getInstagramProfile(token, cleanId);
+        if (profile.username && !profile.username.startsWith("user_") && !profile.username.startsWith("ig_")) {
+          updatePayload.username = profile.username;
+        }
+        if (profile.profile_picture_url) {
+          updatePayload.avatar_url = profile.profile_picture_url;
+        }
+      } catch (err) {
+        console.warn("[webhook:account] Profile enrichment during healing failed:", (err as Error).message);
+      }
+    }
+
+    await supabase.from("connected_accounts").update(updatePayload).eq("id", target.id);
+
+    return {
+      ...(target as unknown as ResolvedConnectedAccount),
+      platform_account_id: cleanId,
+      is_active: true,
+      ...(updatePayload.username ? { username: updatePayload.username as string } : {}),
+      ...(updatePayload.avatar_url ? { avatar_url: updatePayload.avatar_url as string } : {}),
+    };
+  }
+
+  // If multiple accounts exist, verify tokens against cleanId
+  for (const acct of allAccounts) {
+    try {
+      const tokenHex = acct.encrypted_access_token as string;
+      const ivHex = acct.token_iv as string;
+      const token = decryptToken(
+        Buffer.from(tokenHex.replace(/\\x/g, ""), "hex"),
+        Buffer.from(ivHex.replace(/\\x/g, ""), "hex"),
+      );
+
+      const profile = await getInstagramProfile(token, cleanId);
+      if (profile.id === cleanId || profile.username) {
+        console.log(`[webhook:account] Auto-healing verified account id=${acct.id} to platform_account_id=${cleanId}`);
+        const updatePayload: Record<string, unknown> = {
+          platform_account_id: cleanId,
+          is_active: true,
+          last_webhook_at: new Date().toISOString(),
+        };
+        if (profile.username && (!acct.username || acct.username.startsWith("user_") || acct.username.startsWith("ig_"))) {
+          updatePayload.username = profile.username;
+        }
+        if (profile.profile_picture_url) {
+          updatePayload.avatar_url = profile.profile_picture_url;
+        }
+        await supabase.from("connected_accounts").update(updatePayload).eq("id", acct.id);
+        return {
+          ...(acct as unknown as ResolvedConnectedAccount),
+          platform_account_id: cleanId,
+          is_active: true,
+          ...(updatePayload.username ? { username: updatePayload.username as string } : {}),
+          ...(updatePayload.avatar_url ? { avatar_url: updatePayload.avatar_url as string } : {}),
+        };
+      }
+    } catch {
+      // Continue to next account
+    }
+  }
+
+  // Final fallback: match active account that has a fallback user ID pattern
+  const fallbackCandidate = allAccounts.find(
+    (a) =>
+      a.is_active &&
+      (a.username?.startsWith("user_") ||
+        a.username?.startsWith("ig_") ||
+        !a.platform_account_id.startsWith("17841")),
+  );
+
+  if (fallbackCandidate) {
+    console.log(
+      `[webhook:account] Auto-healing fallback candidate id=${fallbackCandidate.id} to platform_account_id=${cleanId}`,
+    );
+    await supabase
+      .from("connected_accounts")
+      .update({
+        platform_account_id: cleanId,
+        is_active: true,
+        last_webhook_at: new Date().toISOString(),
+      })
+      .eq("id", fallbackCandidate.id);
+
+    return {
+      ...(fallbackCandidate as unknown as ResolvedConnectedAccount),
+      platform_account_id: cleanId,
+      is_active: true,
+    };
+  }
+
+  return null;
+}
+
 async function handleMessageEvent(
   supabase: ReturnType<typeof createAdminClient>,
   event: ParsedEvent,
@@ -609,18 +785,7 @@ async function handleMessageEvent(
 
   // 1. Look up connected account by the IG account ID that received the webhook
   const igAccountId = String(event.ig_account_id);
-  const { data: account, error: accountErr } = await supabase
-    .from("connected_accounts")
-    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
-    .eq("platform_account_id", igAccountId)
-    .eq("platform", "instagram")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (accountErr) {
-    console.error("[webhook:sync] DB error looking up connected account for ig_account_id:", igAccountId, accountErr.message);
-    return;
-  }
+  const account = await getConnectedAccountForWebhook(supabase, igAccountId);
 
   if (!account) {
     console.warn("[webhook:sync] No connected account found for ig_account_id:", igAccountId, "— skipping event");
@@ -833,13 +998,7 @@ async function handleCommentEvent(
 
   // 1. Look up connected account
   const igAccountId = String(event.ig_account_id);
-  const { data: account } = await supabase
-    .from("connected_accounts")
-    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
-    .eq("platform_account_id", igAccountId)
-    .eq("platform", "instagram")
-    .eq("is_active", true)
-    .maybeSingle();
+  const account = await getConnectedAccountForWebhook(supabase, igAccountId);
 
   if (!account) {
     console.warn("[webhook:comment] No connected account for ig_account_id:", igAccountId);
@@ -953,13 +1112,7 @@ async function handleStoryMentionEvent(
   }
 
   const igAccountId = String(event.ig_account_id);
-  const { data: account } = await supabase
-    .from("connected_accounts")
-    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
-    .eq("platform_account_id", igAccountId)
-    .eq("platform", "instagram")
-    .eq("is_active", true)
-    .maybeSingle();
+  const account = await getConnectedAccountForWebhook(supabase, igAccountId);
 
   if (!account) {
     console.warn("[webhook:mention] No connected account for ig_account_id:", igAccountId);
@@ -1058,13 +1211,7 @@ async function handleStoryReplyEvent(
   const timestamp = payload.timestamp as number | undefined;
 
   const igAccountId = String(event.ig_account_id);
-  const { data: account } = await supabase
-    .from("connected_accounts")
-    .select("id, workspace_id, platform_account_id, encrypted_access_token, token_iv")
-    .eq("platform_account_id", igAccountId)
-    .eq("platform", "instagram")
-    .eq("is_active", true)
-    .maybeSingle();
+  const account = await getConnectedAccountForWebhook(supabase, igAccountId);
 
   if (!account) {
     console.warn("[webhook:story-reply] No connected account for ig_account_id:", igAccountId);

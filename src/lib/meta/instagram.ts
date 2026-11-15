@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 const INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_OAUTH_BASE = "https://api.instagram.com";
 const INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com";
+const FACEBOOK_GRAPH_BASE = "https://graph.facebook.com";
 const INSTAGRAM_GRAPH_VERSION = "v22.0";
 
 const instagramOAuthStateSchema = z.object({
@@ -364,79 +365,91 @@ export async function getInstagramProfile(
   account_type?: string;
   profile_picture_url?: string;
 }> {
-  // Use official Instagram User Graph fields (id, username, account_type, profile_picture_url)
-  const fields = "id,username,account_type,profile_picture_url";
-  const params = new URLSearchParams({
-    fields,
-    access_token: token,
-  });
-
-  const urlsToTry: string[] = [
-    // 1. Unversioned /me (official Instagram Login endpoint)
-    `${INSTAGRAM_GRAPH_BASE}/me?${params.toString()}`,
-    // 2. Versioned /me (current active Meta Graph API version)
-    `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`,
+  // Layered field sets from richest to minimal fallback to prevent 400 errors
+  const fieldSets = [
+    "id,username,account_type,profile_picture_url",
+    "id,user_id,username,account_type,profile_picture_url",
+    "user_id,username,account_type",
+    "user_id,username",
+    "id,username",
+    "username",
   ];
-
-  if (userId) {
-    // 3. Direct user node unversioned
-    urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(userId)}?${params.toString()}`);
-    // 4. Direct user node versioned
-    urlsToTry.push(
-      `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params.toString()}`,
-    );
-  }
 
   let lastError: Error | null = null;
 
-  for (const url of urlsToTry) {
-    try {
-      const res = await fetch(url);
-      const text = await res.text();
-      if (!res.ok) {
-        console.warn(`[ig-profile] Profile fetch failed on ${new URL(url).pathname} (${res.status}):`, text);
-        lastError = new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
-        continue;
-      }
+  for (const fields of fieldSets) {
+    const params = new URLSearchParams({
+      fields,
+      access_token: token,
+    });
 
-      let json: unknown;
+    const urlsToTry: string[] = [
+      // 1. Unversioned /me (official Instagram Login endpoint)
+      `${INSTAGRAM_GRAPH_BASE}/me?${params.toString()}`,
+      // 2. Versioned /me
+      `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`,
+    ];
+
+    if (userId) {
+      // 3. Direct user node unversioned
+      urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(userId)}?${params.toString()}`);
+      // 4. Direct user node versioned
+      urlsToTry.push(
+        `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params.toString()}`,
+      );
+      // 5. Facebook Graph direct user node
+      urlsToTry.push(
+        `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(userId)}?${params.toString()}`,
+      );
+    }
+
+    for (const url of urlsToTry) {
       try {
-        json = JSON.parse(text);
-      } catch {
-        lastError = new Error(`Instagram profile returned invalid JSON (HTTP ${res.status}).`);
-        continue;
+        const res = await fetch(url);
+        const text = await res.text();
+        if (!res.ok) {
+          lastError = new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
+          continue;
+        }
+
+        let json: unknown;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          lastError = new Error(`Instagram profile returned invalid JSON (HTTP ${res.status}).`);
+          continue;
+        }
+
+        // Unwrap { data: [...] } or { data: { ... } } if present
+        let target = json as Record<string, unknown>;
+        if (target.data) {
+          if (Array.isArray(target.data) && target.data.length > 0) {
+            target = target.data[0] as Record<string, unknown>;
+          } else if (typeof target.data === "object" && target.data !== null) {
+            target = target.data as Record<string, unknown>;
+          }
+        }
+
+        const profileId = String(target.user_id ?? target.id ?? userId ?? "").trim();
+        const rawUsername = typeof target.username === "string" ? target.username.trim() : "";
+        const accountType = typeof target.account_type === "string" ? target.account_type : undefined;
+        const pic = typeof target.profile_picture_url === "string"
+          ? target.profile_picture_url
+          : typeof target.profile_pic === "string"
+            ? target.profile_pic
+            : undefined;
+
+        if (profileId || rawUsername) {
+          return {
+            id: profileId || String(userId ?? ""),
+            username: rawUsername || (profileId ? `ig_${profileId.slice(-6)}` : "unknown"),
+            account_type: accountType,
+            profile_picture_url: pic,
+          };
+        }
+      } catch (fetchErr) {
+        lastError = fetchErr as Error;
       }
-
-      const parsed = z
-        .object({
-          id: z.union([z.string(), z.number()]).optional(),
-          user_id: z.union([z.string(), z.number()]).optional(),
-          username: z.string().min(1).optional(),
-          account_type: z.string().optional(),
-          profile_picture_url: z.string().optional(),
-        })
-        .safeParse(json);
-
-      if (!parsed.success) {
-        lastError = new Error(`Instagram profile response validation failed: ${parsed.error.message}`);
-        continue;
-      }
-
-      const data = parsed.data;
-      const profileId = String(data.id ?? data.user_id ?? userId ?? "");
-      if (!profileId) {
-        lastError = new Error("Instagram profile missing id");
-        continue;
-      }
-
-      return {
-        id: profileId,
-        username: data.username ?? (profileId ? `ig_${profileId.slice(-6)}` : "unknown"),
-        account_type: data.account_type,
-        profile_picture_url: data.profile_picture_url,
-      };
-    } catch (fetchErr) {
-      lastError = fetchErr as Error;
     }
   }
 
