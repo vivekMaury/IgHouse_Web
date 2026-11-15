@@ -1,4 +1,4 @@
-IgInbox — Product Requirements Document v3.2
+IgInbox — Product Requirements Document
 Version 3.2 · Product scope and implementation status · Updated November 14, 2026
 1. What Changed From v2.0
 Your v2.0 document describes a finished build with every milestone marked complete. For a fresh start you need a build plan instead, so v3.0 is organized around what to build first, what to defer, and how to work with Claude step by step.
