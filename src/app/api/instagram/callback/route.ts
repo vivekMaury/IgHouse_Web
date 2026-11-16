@@ -41,7 +41,8 @@ function loginRedirect(origin: string, error: string): NextResponse {
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
+  const rawCode = searchParams.get("code");
+  const code = rawCode ? rawCode.replace(/#_.*$/, "").trim() : null;
   const state = searchParams.get("state");
   const error = searchParams.get("error");
   const errorReason = searchParams.get("error_reason");

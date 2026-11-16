@@ -26,9 +26,12 @@ function getTokenStatus(expiresAt: string | null): {
   if (!expiresAt) return { label: "Unknown", variant: "warning" };
   const expires = new Date(expiresAt);
   const now = new Date();
-  const daysLeft = Math.floor((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const diffMs = expires.getTime() - now.getTime();
+  const daysLeft = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
 
-  if (daysLeft < 0) return { label: "Expired", variant: "expired" };
+  if (diffMs <= 0) return { label: "Expired", variant: "expired" };
+  if (daysLeft === 0) return { label: `Expires in ${Math.max(1, hoursLeft)}h`, variant: "warning" };
   if (daysLeft < 7) return { label: `Expires in ${daysLeft}d`, variant: "warning" };
   return { label: `Expires in ${daysLeft}d`, variant: "healthy" };
 }

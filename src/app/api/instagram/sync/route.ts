@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { inngest } from "@/lib/inngest/client";
+import { decryptToken } from "@/lib/crypto/token";
+import { getInstagramProfile } from "@/lib/meta/instagram";
 import { z } from "zod/v4";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
 
   const { data: account } = await supabase
     .from("connected_accounts")
-    .select("id, workspace_id, platform_account_id, is_active")
+    .select("id, workspace_id, platform_account_id, is_active, encrypted_access_token, token_iv, username, avatar_url")
     .eq("id", parsed.data.accountId)
     .single();
 
@@ -51,6 +53,10 @@ export async function POST(request: Request) {
     workspace_id: string;
     platform_account_id: string;
     is_active: boolean;
+    encrypted_access_token?: string;
+    token_iv?: string;
+    username?: string | null;
+    avatar_url?: string | null;
   } | null;
 
   if (!row) {
@@ -62,6 +68,30 @@ export async function POST(request: Request) {
       { error: "Account is inactive. Reconnect to sync." },
       { status: 400 },
     );
+  }
+
+  // Attempt to refresh profile details from Instagram Graph API
+  if (row.encrypted_access_token && row.token_iv) {
+    try {
+      const tokenHex = row.encrypted_access_token.replace(/\\x/g, "");
+      const ivHex = row.token_iv.replace(/\\x/g, "");
+      const accessToken = decryptToken(Buffer.from(tokenHex, "hex"), Buffer.from(ivHex, "hex"));
+      const profile = await getInstagramProfile(accessToken, row.platform_account_id);
+
+      const updates: Record<string, unknown> = {};
+      if (profile.username && (!row.username || row.username.startsWith("user_") || row.username.startsWith("ig_"))) {
+        updates.username = profile.username;
+      }
+      if (profile.profile_picture_url && !row.avatar_url) {
+        updates.avatar_url = profile.profile_picture_url;
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("connected_accounts").update(updates).eq("id", row.id);
+        console.log(`[sync] Refreshed profile for account=${row.id}:`, updates);
+      }
+    } catch (err) {
+      console.warn("[sync] Profile refresh error:", (err as Error).message);
+    }
   }
 
   await inngest.send({
