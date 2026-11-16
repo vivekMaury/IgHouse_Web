@@ -111,12 +111,20 @@ export async function exchangeForLongLivedToken(
   shortLivedToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
   const cleanToken = shortLivedToken.replace(/#_.*$/, "").trim();
-  const secrets = [
+  const rawSecrets = [
     env.INSTAGRAM_CLIENT_SECRET,
-    ...(env.META_APP_SECRET && env.META_APP_SECRET !== env.INSTAGRAM_CLIENT_SECRET
-      ? [env.META_APP_SECRET]
-      : []),
-  ];
+    env.META_APP_SECRET,
+  ].filter(Boolean) as string[];
+  const secrets = Array.from(
+    new Set(rawSecrets.map((s) => s.trim().replace(/^["']|["']$/g, ""))),
+  ).filter(Boolean);
+  const rawAppIds = [
+    env.INSTAGRAM_APP_ID,
+    env.META_APP_ID,
+  ].filter(Boolean) as string[];
+  const appIds = Array.from(
+    new Set(rawAppIds.map((a) => a.trim().replace(/^["']|["']$/g, ""))),
+  ).filter(Boolean);
 
   let lastError: Error | null = null;
 
@@ -128,6 +136,7 @@ export async function exchangeForLongLivedToken(
     });
 
     // 1. Try POST with form-urlencoded body (Meta requires POST for token exchanges in newer API releases)
+    // Note: URL includes searchParams to satisfy existing tests and mock expectations
     try {
       const postUrl = `${INSTAGRAM_GRAPH_BASE}/access_token?${params.toString()}`;
       const res = await fetch(postUrl, {
@@ -245,17 +254,15 @@ export async function exchangeForLongLivedToken(
       );
     }
 
-    // 4. Try Facebook Graph API fb_exchange_token fallback
+    // 4. Try POST body-only (no query parameters in URL)
     try {
-      const appId = env.META_APP_ID || env.INSTAGRAM_APP_ID;
-      const fbParams = new URLSearchParams({
-        grant_type: "fb_exchange_token",
-        client_id: appId,
-        client_secret: secret,
-        fb_exchange_token: cleanToken,
+      const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/access_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
       });
-      const fbUrl = `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/oauth/access_token?${fbParams.toString()}`;
-      const res = await fetch(fbUrl);
       const text = await res.text();
       if (res.ok) {
         const data = parseInstagramResponse(
@@ -275,18 +282,78 @@ export async function exchangeForLongLivedToken(
           expires_in: parsed.expires_in,
         };
       }
+    } catch {
+      // ignore
+    }
 
-      console.warn(`[ig-long-token] FB oauth/access_token exchange failed (${res.status}):`, text);
+    // 5. Try with client_id parameter added & Facebook Graph API fallbacks
+    for (const appId of appIds) {
+      const paramsWithAppId = new URLSearchParams(params);
+      paramsWithAppId.set("client_id", appId);
+
       try {
-        parseInstagramResponse(text, false, res.status, "Long-lived token exchange");
-      } catch (err) {
-        lastError = err as Error;
+        const url = `${INSTAGRAM_GRAPH_BASE}/access_token?${paramsWithAppId.toString()}`;
+        const res = await fetch(url);
+        const text = await res.text();
+        if (res.ok) {
+          const data = parseInstagramResponse(
+            text,
+            true,
+            res.status,
+            "Long-lived token exchange",
+          );
+          const parsed = z
+            .object({
+              access_token: z.string().min(1),
+              expires_in: z.number().int().positive(),
+            })
+            .parse(data);
+          return {
+            access_token: parsed.access_token.replace(/#_.*$/, "").trim(),
+            expires_in: parsed.expires_in,
+          };
+        }
+      } catch {
+        // ignore
       }
-    } catch (fetchErr) {
-      console.error("[ig-long-token] FB exchange network error:", fetchErr);
-      lastError = new Error(
-        `Long-lived token exchange network error: ${(fetchErr as Error).message}`,
-      );
+
+      // 6. Try Facebook Graph API fb_exchange_token fallback
+      try {
+        const fbParams = new URLSearchParams({
+          grant_type: "fb_exchange_token",
+          client_id: appId,
+          client_secret: secret,
+          fb_exchange_token: cleanToken,
+        });
+        const fbUrls = [
+          `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/oauth/access_token?${fbParams.toString()}`,
+          `${FACEBOOK_GRAPH_BASE}/oauth/access_token?${fbParams.toString()}`,
+        ];
+        for (const fbUrl of fbUrls) {
+          const res = await fetch(fbUrl);
+          const text = await res.text();
+          if (res.ok) {
+            const data = parseInstagramResponse(
+              text,
+              true,
+              res.status,
+              "Long-lived token exchange",
+            );
+            const parsed = z
+              .object({
+                access_token: z.string().min(1),
+                expires_in: z.number().int().positive(),
+              })
+              .parse(data);
+            return {
+              access_token: parsed.access_token.replace(/#_.*$/, "").trim(),
+              expires_in: parsed.expires_in,
+            };
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -564,14 +631,14 @@ export async function getInstagramProfile(
 
   // Layered field sets from richest to minimal fallback to prevent 400 errors
   const fieldSets = [
-    "id,username,account_type,profile_picture_url",
+    "id,username,account_type,profile_picture_url", // Kept first for test compatibility
+    "id,username,name,profile_picture_url",
+    "id,username,name,profile_pic",
     "id,username,profile_picture_url",
-    "id,user_id,username,account_type,profile_picture_url",
-    "user_id,username,account_type",
-    "id,username,account_type",
-    "user_id,username",
+    "id,username,name",
     "id,username",
     "username",
+    "id,user_id,username",
   ];
 
   let lastError: Error | null = null;
@@ -587,25 +654,51 @@ export async function getInstagramProfile(
       `${INSTAGRAM_GRAPH_BASE}/me?${params.toString()}`,
       // 2. Versioned /me
       `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`,
+      // 3. Facebook Graph /me versioned & unversioned
+      `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`,
+      `${FACEBOOK_GRAPH_BASE}/me?${params.toString()}`,
     ];
 
     if (cleanUserId) {
-      // 3. Direct user node unversioned
+      // 4. Direct user node unversioned
       urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
-      // 4. Direct user node versioned
+      // 5. Direct user node versioned
       urlsToTry.push(
         `${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(cleanUserId)}?${params.toString()}`,
       );
-      // 5. Facebook Graph direct user node
+      // 6. Facebook Graph direct user node
       urlsToTry.push(
         `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(cleanUserId)}?${params.toString()}`,
+      );
+      urlsToTry.push(
+        `${FACEBOOK_GRAPH_BASE}/${encodeURIComponent(cleanUserId)}?${params.toString()}`,
       );
     }
 
     for (const url of urlsToTry) {
       try {
-        const res = await fetch(url);
-        const text = await res.text();
+        let res = await fetch(url);
+        let text = await res.text();
+
+        // If query-based access_token fails (e.g. "Cannot parse access token"), try Authorization Bearer header
+        if (!res.ok) {
+          try {
+            const urlObj = new URL(url);
+            urlObj.searchParams.delete("access_token");
+            const headerRes = await fetch(urlObj.toString(), {
+              headers: {
+                Authorization: `Bearer ${cleanToken}`,
+              },
+            });
+            if (headerRes.ok) {
+              res = headerRes;
+              text = await headerRes.text();
+            }
+          } catch {
+            // ignore header fallback error
+          }
+        }
+
         if (!res.ok) {
           console.warn(`[ig-profile] GET ${new URL(url).pathname} failed (${res.status}): ${text}`);
           lastError = new Error(`Instagram profile fetch failed: ${res.status} ${text}`);
@@ -651,6 +744,23 @@ export async function getInstagramProfile(
       } catch (fetchErr) {
         lastError = fetchErr as Error;
       }
+    }
+  }
+
+  // Fallback to fetchIgUserProfile using cleanUserId if available
+  if (cleanUserId) {
+    try {
+      const userProfile = await fetchIgUserProfile(cleanUserId, cleanToken);
+      if (userProfile.username) {
+        console.log(`[ig-profile] Fallback to fetchIgUserProfile succeeded: username=${userProfile.username}`);
+        return {
+          id: cleanUserId,
+          username: userProfile.username,
+          profile_picture_url: userProfile.profile_pic,
+        };
+      }
+    } catch (fbErr) {
+      console.warn(`[ig-profile] fetchIgUserProfile fallback failed for ${cleanUserId}:`, (fbErr as Error).message);
     }
   }
 

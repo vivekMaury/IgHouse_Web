@@ -159,9 +159,23 @@ export async function GET(request: Request) {
   let username = `user_${igUserId.slice(-6)}`;
   let avatarUrl: string | null = null;
   try {
-    const profile = await getInstagramProfile(longToken, igUserId);
+    let profile: { id: string; username: string; account_type?: string; profile_picture_url?: string };
+    try {
+      profile = await getInstagramProfile(longToken, igUserId);
+    } catch (longTokenErr) {
+      console.warn(
+        "[ig-callback] Profile fetch with longToken failed, falling back to shortToken:",
+        (longTokenErr as Error).message,
+      );
+      profile = await getInstagramProfile(shortToken, igUserId);
+    }
+
     igBusinessAccountId = profile.id;
-    username = profile.username;
+    if (profile.username && !profile.username.startsWith("user_") && !profile.username.startsWith("ig_")) {
+      username = profile.username;
+    } else if (profile.username) {
+      username = profile.username;
+    }
     avatarUrl = profile.profile_picture_url ?? null;
     console.log("[ig-callback] Profile:", username, "type:", profile.account_type, "id:", igBusinessAccountId);
 
