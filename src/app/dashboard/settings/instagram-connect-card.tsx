@@ -66,7 +66,8 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
         body: JSON.stringify({ accountId }),
       });
       if (res.ok) {
-        toast.success("Inbox sync started. Conversations will appear shortly.");
+        toast.success("Account profile and inbox synced successfully.");
+        router.refresh();
       } else {
         const data = (await res.json()) as { error?: string };
         toast.error(data.error ?? "Failed to start sync");

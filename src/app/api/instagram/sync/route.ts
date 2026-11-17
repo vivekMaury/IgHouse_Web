@@ -101,10 +101,16 @@ export async function POST(request: Request) {
       }
 
       const updates: Record<string, unknown> = {};
-      if (profileUsername && (!row.username || row.username.startsWith("user_") || row.username.startsWith("ig_"))) {
+      if (
+        profileUsername &&
+        (row.username !== profileUsername ||
+          !row.username ||
+          row.username.startsWith("user_") ||
+          row.username.startsWith("ig_"))
+      ) {
         updates.username = profileUsername;
       }
-      if (profilePic && !row.avatar_url) {
+      if (profilePic && row.avatar_url !== profilePic) {
         updates.avatar_url = profilePic;
       }
 
