@@ -138,11 +138,35 @@ export async function POST(request: Request) {
       }
 
       if (Object.keys(updates).length > 0) {
-        await supabase.from("connected_accounts").update(updates).eq("id", row.id);
+        const { error: updateError } = await supabase.from("connected_accounts").update(updates).eq("id", row.id);
+        if (updateError) {
+          console.error("[sync] DB update error:", updateError.message);
+          return NextResponse.json(
+            { error: "Database update failed: " + updateError.message },
+            { status: 500 },
+          );
+        }
         console.log(`[sync] Refreshed profile/token for account=${row.id}:`, updates);
+      } else if (
+        !row.username ||
+        row.username.startsWith("user_") ||
+        row.username.startsWith("ig_")
+      ) {
+        console.warn(`[sync] Could not resolve username for fallback account=${row.id}`);
+        return NextResponse.json(
+          {
+            error:
+              "Could not fetch Instagram username from Meta. Please ensure the account is an Instagram Professional (Business/Creator) account and reconnect.",
+          },
+          { status: 400 },
+        );
       }
     } catch (err) {
       console.warn("[sync] Profile refresh error:", (err as Error).message);
+      return NextResponse.json(
+        { error: `Sync failed: ${(err as Error).message}` },
+        { status: 400 },
+      );
     }
   }
 

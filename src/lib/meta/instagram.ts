@@ -65,7 +65,7 @@ export function getInstagramAuthUrl(redirectUri: string, state: string): string 
 export async function exchangeCodeForToken(
   code: string,
   redirectUri: string,
-): Promise<{ access_token: string; user_id: string }> {
+): Promise<{ access_token: string; user_id: string; username?: string }> {
   const cleanCode = code.replace(/#_.*$/, "").trim();
   const cleanRedirectUri = redirectUri.replace(/#_.*$/, "").trim();
   const tokenUrl = `${INSTAGRAM_OAUTH_BASE}/oauth/access_token`;
@@ -104,7 +104,17 @@ export async function exchangeCodeForToken(
   const userId = userIdMatch?.[1] ?? userIdMatch?.[2] ?? String(tokenResponse.user_id);
   const cleanToken = tokenResponse.access_token.replace(/#_.*$/, "").trim();
 
-  return { access_token: cleanToken, user_id: userId };
+  // Extract username directly if Meta provides it in token exchange
+  const usernameMatch = text.match(/"username"\s*:\s*"([^"]+)"/);
+  const recordData = data as Record<string, unknown> | null;
+  const parsedUsername =
+    usernameMatch?.[1]?.trim() ||
+    (typeof recordData?.username === "string" ? recordData.username.trim() : undefined) ||
+    (typeof (recordData?.user as Record<string, unknown>)?.username === "string"
+      ? ((recordData?.user as Record<string, unknown>).username as string).trim()
+      : undefined);
+
+  return { access_token: cleanToken, user_id: userId, username: parsedUsername };
 }
 
 function parseLongTokenResponse(
@@ -271,30 +281,75 @@ export async function exchangeForLongLivedToken(
       // ignore
     }
 
-    // 6. Facebook Graph API fb_exchange_token fallbacks
+    // 6. Instagram Graph API with client_id parameter
     for (const appId of appIds) {
       try {
-        const fbParams = new URLSearchParams({
-          grant_type: "fb_exchange_token",
+        const idParams = new URLSearchParams({
+          grant_type: "ig_exchange_token",
           client_id: appId,
           client_secret: secret,
-          fb_exchange_token: cleanToken,
+          access_token: cleanToken,
         });
-        const fbUrls = [
-          `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/oauth/access_token?${fbParams.toString()}`,
-          `${FACEBOOK_GRAPH_BASE}/oauth/access_token?${fbParams.toString()}`,
+        const res = await fetch(`${INSTAGRAM_GRAPH_BASE}/access_token?${idParams.toString()}`);
+        const text = await res.text();
+        if (res.ok) {
+          return parseLongTokenResponse(text, res.status);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 7. Facebook Graph API fb_exchange_token and ig_exchange_token fallbacks
+    for (const appId of appIds) {
+      try {
+        const fbVariants = [
+          new URLSearchParams({
+            grant_type: "fb_exchange_token",
+            client_id: appId,
+            client_secret: secret,
+            fb_exchange_token: cleanToken,
+          }),
+          new URLSearchParams({
+            grant_type: "ig_exchange_token",
+            client_id: appId,
+            client_secret: secret,
+            access_token: cleanToken,
+          }),
+          new URLSearchParams({
+            grant_type: "ig_exchange_token",
+            client_secret: secret,
+            access_token: cleanToken,
+          }),
         ];
-        for (const fbUrl of fbUrls) {
-          const res = await fetch(fbUrl);
-          const text = await res.text();
-          if (res.ok) {
-            return parseLongTokenResponse(text, res.status);
+
+        for (const fbParams of fbVariants) {
+          const fbUrls = [
+            `${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/oauth/access_token?${fbParams.toString()}`,
+            `${FACEBOOK_GRAPH_BASE}/oauth/access_token?${fbParams.toString()}`,
+          ];
+          for (const fbUrl of fbUrls) {
+            const res = await fetch(fbUrl);
+            const text = await res.text();
+            if (res.ok) {
+              return parseLongTokenResponse(text, res.status);
+            }
           }
         }
       } catch {
         // ignore
       }
     }
+  }
+
+  // Fallback: If token is already long-lived or refreshable, attempt refresh
+  try {
+    const refreshed = await refreshLongLivedToken(cleanToken);
+    if (refreshed.access_token) {
+      return refreshed;
+    }
+  } catch {
+    // ignore
   }
 
   throw (
@@ -576,12 +631,13 @@ export async function getInstagramProfile(
 
   // Layered field sets:
   // 1st entry satisfies unit test mock expectations
-  // 2nd entry (id,username) is universally supported by all Instagram account types on Graph API
+  // 2nd entry (user_id,username) is the official modern Instagram Login for Business endpoint field set
   const fieldSets = [
     "id,username,account_type,profile_picture_url",
+    "user_id,username",
+    "username",
     "id,username",
     "id,username,profile_picture_url",
-    "username",
   ];
 
   let lastError: Error | null = null;
@@ -599,15 +655,13 @@ export async function getInstagramProfile(
 
     if (cleanUserId) {
       urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
+      urlsToTry.push(`${INSTAGRAM_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
+      urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
+      urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
     }
 
-    // Also include Facebook Graph /me fallback if on clean id,username
-    if (fields === "id,username") {
-      urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`);
-      if (cleanUserId) {
-        urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/${encodeURIComponent(cleanUserId)}?${params.toString()}`);
-      }
-    }
+    urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/${INSTAGRAM_GRAPH_VERSION}/me?${params.toString()}`);
+    urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/me?${params.toString()}`);
 
     for (const url of urlsToTry) {
       try {
@@ -657,7 +711,11 @@ export async function getInstagramProfile(
         }
 
         const profileId = String(target.user_id ?? target.id ?? cleanUserId ?? "").trim();
-        const rawUsername = typeof target.username === "string" ? target.username.trim() : "";
+        let rawUsername = typeof target.username === "string" ? target.username.trim() : "";
+        if (!rawUsername) {
+          const match = text.match(/"username"\s*:\s*"([^"]+)"/);
+          if (match?.[1]) rawUsername = match[1].trim();
+        }
         const accountType = typeof target.account_type === "string" ? target.account_type : undefined;
         const pic = typeof target.profile_picture_url === "string"
           ? target.profile_picture_url

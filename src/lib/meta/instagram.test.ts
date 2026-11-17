@@ -76,7 +76,25 @@ describe("Instagram Login token exchange", () => {
     expect(result).toEqual({
       access_token: "short-token",
       user_id: "12345678901234567",
+      username: undefined,
     });
+  });
+
+  it("extracts username from code exchange response when provided by Meta", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        '{"access_token":"short-token","user_id":"12345678901234567","username":"meta_creator"}',
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await exchangeCodeForToken(
+      "authorization-code",
+      "https://iginbox.com/api/instagram/callback",
+    );
+
+    expect(result.username).toBe("meta_creator");
   });
 
   it("exchanges short-lived tokens using Instagram's 60-day token grant via POST", async () => {
@@ -265,5 +283,24 @@ describe("getInstagramProfile", () => {
     expect(profile.id).toBe("17841405822304911");
     expect(profile.username).toBe("directuser");
     expect(profile.account_type).toBe("MEDIA_CREATOR");
+  });
+
+  it("resolves profile via user_id,username when legacy fieldset fails on /me", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("Tried accessing nonexisting field", { status: 400 }))
+      .mockResolvedValueOnce(new Response("Tried accessing nonexisting field", { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          user_id: "17841405822304911",
+          username: "modern_business",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await getInstagramProfile("valid-token");
+
+    expect(profile.id).toBe("17841405822304911");
+    expect(profile.username).toBe("modern_business");
   });
 });

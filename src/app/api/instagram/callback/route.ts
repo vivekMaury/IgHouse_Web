@@ -125,12 +125,14 @@ export async function GET(request: Request) {
   // Instagram Login codes must be exchanged through Instagram's OAuth endpoint.
   let shortToken: string;
   let igUserId: string;
+  let oauthUsername: string | undefined;
   try {
     const redirectUri = getInstagramRedirectUri();
     const result = await exchangeCodeForToken(code, redirectUri);
     shortToken = result.access_token;
     igUserId = result.user_id;
-    console.log("[ig-callback] Short-lived token obtained for IG user:", igUserId);
+    oauthUsername = result.username;
+    console.log("[ig-callback] Short-lived token obtained for IG user:", igUserId, "oauth username:", oauthUsername);
   } catch (err) {
     console.error("[ig-callback] Token exchange failed:", (err as Error).message);
     return redirectForError("token_exchange_failed");
@@ -156,7 +158,10 @@ export async function GET(request: Request) {
 
   // ── Fetch Instagram profile & validate account type ──
   let igBusinessAccountId: string = igUserId;
-  let username = `user_${igUserId.slice(-6)}`;
+  let username =
+    oauthUsername && !oauthUsername.startsWith("user_") && !oauthUsername.startsWith("ig_")
+      ? oauthUsername
+      : `user_${igUserId.slice(-6)}`;
   let avatarUrl: string | null = null;
   try {
     let profile: { id: string; username: string; account_type?: string; profile_picture_url?: string };
@@ -170,14 +175,14 @@ export async function GET(request: Request) {
       profile = await getInstagramProfile(shortToken, igUserId);
     }
 
-    igBusinessAccountId = profile.id;
+    igBusinessAccountId = profile.id || igUserId;
     if (profile.username && !profile.username.startsWith("user_") && !profile.username.startsWith("ig_")) {
       username = profile.username;
     } else if (profile.username) {
       username = profile.username;
     }
     avatarUrl = profile.profile_picture_url ?? null;
-    console.log("[ig-callback] Profile:", username, "type:", profile.account_type, "id:", igBusinessAccountId);
+    console.log("[ig-callback] Profile resolved: username=@" + username, "type:", profile.account_type, "id:", igBusinessAccountId);
 
     if (
       profile.account_type &&
@@ -188,7 +193,7 @@ export async function GET(request: Request) {
     }
   } catch (err) {
     console.warn(
-      "[ig-callback] Profile fetch failed, continuing with token IG user ID:",
+      "[ig-callback] Profile fetch failed, continuing with resolved username @" + username + ":",
       (err as Error).message,
     );
     if (!igBusinessAccountId) {
