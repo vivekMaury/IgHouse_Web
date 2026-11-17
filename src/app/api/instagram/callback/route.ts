@@ -164,7 +164,7 @@ export async function GET(request: Request) {
       : `user_${igUserId.slice(-6)}`;
   let avatarUrl: string | null = null;
   try {
-    let profile: { id: string; username: string; account_type?: string; profile_picture_url?: string };
+    let profile: { id: string; username: string; name?: string; account_type?: string; profile_picture_url?: string };
     try {
       profile = await getInstagramProfile(longToken, igUserId);
     } catch (longTokenErr) {
@@ -182,7 +182,13 @@ export async function GET(request: Request) {
       username = profile.username;
     }
     avatarUrl = profile.profile_picture_url ?? null;
-    console.log("[ig-callback] Profile resolved: username=@" + username, "type:", profile.account_type, "id:", igBusinessAccountId);
+    console.log("[ig-callback:debug] Meta Profile resolved:", {
+      assignedUsername: username,
+      platformAccountId: igBusinessAccountId,
+      accountType: profile.account_type,
+      name: profile.name,
+      hasAvatar: Boolean(avatarUrl),
+    });
 
     if (
       profile.account_type &&
@@ -467,34 +473,44 @@ async function saveAccountAndRedirect({
   try {
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
+    const upsertPayload = {
+      workspace_id: workspaceId,
+      platform: "instagram",
+      platform_account_id: igBusinessAccountId,
+      username,
+      avatar_url: avatarUrl,
+      encrypted_access_token: `\\x${encryptedHex}`,
+      token_iv: `\\x${ivHex}`,
+      key_version: 1,
+      token_expires_at: expiresAt,
+      scopes: [
+        "instagram_business_basic",
+        "instagram_business_manage_messages",
+        "instagram_business_manage_comments",
+      ],
+      is_active: true,
+    };
+
+    console.log("[ig-callback:db-payload] Supabase Upsert Payload for public.connected_accounts:", {
+      workspace_id: upsertPayload.workspace_id,
+      platform: upsertPayload.platform,
+      platform_account_id: upsertPayload.platform_account_id,
+      username: upsertPayload.username,
+      token_expires_at: upsertPayload.token_expires_at,
+    });
+
     const { data: upsertedRow, error: upsertError } = await admin.from("connected_accounts").upsert(
-      {
-        workspace_id: workspaceId,
-        platform: "instagram",
-        platform_account_id: igBusinessAccountId,
-        username,
-        avatar_url: avatarUrl,
-        encrypted_access_token: `\\x${encryptedHex}`,
-        token_iv: `\\x${ivHex}`,
-        key_version: 1,
-        token_expires_at: expiresAt,
-        scopes: [
-          "instagram_business_basic",
-          "instagram_business_manage_messages",
-          "instagram_business_manage_comments",
-        ],
-        is_active: true,
-      } as Record<string, unknown>,
+      upsertPayload as Record<string, unknown>,
       { onConflict: "workspace_id,platform,platform_account_id" },
     ).select("id").single();
 
     if (upsertError || !upsertedRow) {
-      console.error("[ig-callback] DB upsert error:", upsertError);
+      console.error("[ig-callback:db-error] DB upsert error:", upsertError);
       return errorRedirect(errorUrl, "db_save_failed");
     }
 
     const connectedAccountId = (upsertedRow as { id: string }).id;
-    console.log("[ig-callback] Account saved for @" + username);
+    console.log("[ig-callback:db-success] Account saved successfully in DB for @" + username, "id:", connectedAccountId);
 
     void inngest.send({
       name: "instagram/account.connected",

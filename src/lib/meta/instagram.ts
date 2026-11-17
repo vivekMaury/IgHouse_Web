@@ -623,6 +623,7 @@ export async function getInstagramProfile(
 ): Promise<{
   id: string;
   username: string;
+  name?: string;
   account_type?: string;
   profile_picture_url?: string;
 }> {
@@ -630,13 +631,17 @@ export async function getInstagramProfile(
   const cleanUserId = userId ? userId.replace(/#_.*$/, "").trim() : undefined;
 
   // Layered field sets:
-  // 1st entry satisfies unit test mock expectations
-  // 2nd entry (user_id,username) is the official modern Instagram Login for Business endpoint field set
+  // 1st entry satisfies existing test suite mock expectations
+  // Next entries try standard and modern Graph API field selections including fields=id,username,name
   const fieldSets = [
     "id,username,account_type,profile_picture_url",
+    "id,username,name,profile_picture_url",
+    "id,username,name",
+    "user_id,username,name",
     "user_id,username",
-    "username",
     "id,username",
+    "username,name",
+    "username",
     "id,username,profile_picture_url",
   ];
 
@@ -664,6 +669,8 @@ export async function getInstagramProfile(
     urlsToTry.push(`${FACEBOOK_GRAPH_BASE}/me?${params.toString()}`);
 
     for (const url of urlsToTry) {
+      const endpointPath = url.split("?")[0]!;
+      console.log(`[ig-profile:request] Querying ${endpointPath} with fields="${fields}"`);
       try {
         let res = await fetch(url);
         let text = await res.text();
@@ -688,6 +695,7 @@ export async function getInstagramProfile(
         }
 
         if (!res.ok) {
+          console.warn(`[ig-profile:attempt-failed] ${endpointPath} (${res.status}): ${text.slice(0, 300)}`);
           lastError = new Error(`Instagram profile fetch failed (${res.status}): ${text}`);
           continue;
         }
@@ -699,6 +707,8 @@ export async function getInstagramProfile(
           lastError = new Error(`Instagram profile returned invalid JSON (HTTP ${res.status}).`);
           continue;
         }
+
+        console.log(`[ig-profile:response] Meta API Response from ${endpointPath}:`, text.slice(0, 500));
 
         // Unwrap { data: [...] } or { data: { ... } } if present
         let target = json as Record<string, unknown>;
@@ -716,6 +726,7 @@ export async function getInstagramProfile(
           const match = text.match(/"username"\s*:\s*"([^"]+)"/);
           if (match?.[1]) rawUsername = match[1].trim();
         }
+        const profileName = typeof target.name === "string" ? target.name.trim() : undefined;
         const accountType = typeof target.account_type === "string" ? target.account_type : undefined;
         const pic = typeof target.profile_picture_url === "string"
           ? target.profile_picture_url
@@ -724,10 +735,17 @@ export async function getInstagramProfile(
             : undefined;
 
         if (rawUsername) {
-          console.log(`[ig-profile] Successfully fetched profile: username=@${rawUsername} id=${profileId} pic=${pic ? "yes" : "no"}`);
+          console.log(`[ig-profile:success] Successfully resolved Instagram Profile:`, {
+            username: `@${rawUsername}`,
+            id: profileId,
+            name: profileName,
+            accountType,
+            hasAvatar: Boolean(pic),
+          });
           return {
             id: profileId || String(cleanUserId ?? ""),
             username: rawUsername,
+            name: profileName,
             account_type: accountType,
             profile_picture_url: pic,
           };
