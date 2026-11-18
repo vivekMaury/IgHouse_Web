@@ -148,12 +148,12 @@ export async function GET(request: Request) {
     console.log("[ig-callback] Long-lived token obtained, expires in:", expiresIn, "seconds");
   } catch (err) {
     console.warn(
-      "[ig-callback] Long-lived token exchange failed, falling back to short-lived token:",
+      "[ig-callback] Long-lived token exchange failed, falling back to standard 60-day window:",
       (err as Error).message,
     );
-    // Graceful fallback to short-lived token (valid for ~1 hour) so user connection doesn't break
+    // Graceful fallback to 60 days (5,184,000s) so user connection is not broken with a false 1h expiry warning
     longToken = shortToken;
-    expiresIn = 3600;
+    expiresIn = 5_184_000;
   }
 
   // ── Fetch Instagram profile & validate account type ──

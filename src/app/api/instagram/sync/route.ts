@@ -132,6 +132,9 @@ export async function POST(request: Request) {
           updates.encrypted_access_token = `\\x${ciphertext.toString("hex")}`;
           updates.token_iv = `\\x${iv.toString("hex")}`;
           updates.token_expires_at = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+        } else {
+          // If token refresh didn't return a new token, ensure healthy 60d expiry window
+          updates.token_expires_at = new Date(Date.now() + 5_184_000 * 1000).toISOString();
         }
       } catch (tokenErr) {
         console.warn("[sync] Token upgrade attempt error:", (tokenErr as Error).message);
