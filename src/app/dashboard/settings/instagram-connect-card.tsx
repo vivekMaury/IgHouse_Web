@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Camera, CheckCircle2, AlertTriangle, Trash2, RefreshCw, Pencil, Check, X } from "lucide-react";
+import { Camera, CheckCircle2, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -40,47 +40,6 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
   const router = useRouter();
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editUsername, setEditUsername] = useState("");
-  const [savingUsername, setSavingUsername] = useState(false);
-
-  function startEditing(account: ConnectedAccount) {
-    setEditingId(account.id);
-    setEditUsername(account.username?.startsWith("user_") ? "" : (account.username ?? ""));
-  }
-
-  function cancelEditing() {
-    setEditingId(null);
-    setEditUsername("");
-  }
-
-  async function handleSaveUsername(accountId: string) {
-    const trimmed = editUsername.trim().replace(/^@/, "");
-    if (!trimmed) {
-      toast.error("Please enter a valid Instagram username");
-      return;
-    }
-    setSavingUsername(true);
-    try {
-      const res = await fetch("/api/instagram/update-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId, username: trimmed }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (res.ok) {
-        toast.success("Instagram username updated!");
-        setEditingId(null);
-        router.refresh();
-      } else {
-        toast.error(data.error ?? "Failed to update username");
-      }
-    } catch {
-      toast.error("Failed to update username");
-    } finally {
-      setSavingUsername(false);
-    }
-  }
 
   async function handleDisconnect(accountId: string) {
     setDisconnecting(accountId);
@@ -160,57 +119,17 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
                     </div>
                   )}
                   <div>
-                    {editingId === account.id ? (
-                      <div className="flex items-center gap-1.5 py-0.5">
-                        <span className="text-sm font-medium text-muted-foreground">@</span>
-                        <input
-                          type="text"
-                          value={editUsername}
-                          onChange={(e) => setEditUsername(e.target.value)}
-                          placeholder="username"
-                          className="h-7 w-32 rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveUsername(account.id);
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                          autoFocus
-                          disabled={savingUsername}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveUsername(account.id)}
-                          disabled={savingUsername}
-                          className="rounded p-1 text-emerald-500 hover:bg-muted"
-                          title="Save username"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={cancelEditing}
-                          disabled={savingUsername}
-                          className="rounded p-1 text-muted-foreground hover:bg-muted"
-                          title="Cancel"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium">
-                          @{account.username ?? account.platform_account_id}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => startEditing(account)}
-                          className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          title="Edit username"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">
+                        @{account.username ?? account.platform_account_id}
+                      </p>
+                      {account.username?.startsWith("user_") && (
+                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-500 border border-amber-500/20">
+                          Personal Account
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                       {tokenStatus.variant === "healthy" ? (
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                       ) : (
@@ -227,11 +146,6 @@ export function InstagramConnectCard({ accounts }: { accounts: ConnectedAccount[
                         </>
                       )}
                     </div>
-                    {account.username?.startsWith("user_") && (
-                      <p className="text-[11px] text-amber-500/90 pt-0.5">
-                        Tip: Click pencil to set your handle, or switch account to Professional on Instagram.
-                      </p>
-                    )}
                   </div>
                 </div>
 

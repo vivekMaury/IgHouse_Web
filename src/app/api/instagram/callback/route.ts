@@ -161,7 +161,7 @@ export async function GET(request: Request) {
   let username =
     oauthUsername && !oauthUsername.startsWith("user_") && !oauthUsername.startsWith("ig_")
       ? oauthUsername
-      : `user_${igUserId.slice(-6)}`;
+      : "";
   let avatarUrl: string | null = null;
   try {
     let profile: { id: string; username: string; name?: string; account_type?: string; profile_picture_url?: string };
@@ -198,13 +198,19 @@ export async function GET(request: Request) {
       return redirectForError("personal_account");
     }
   } catch (err) {
-    console.warn(
-      "[ig-callback] Profile fetch failed, continuing with resolved username @" + username + ":",
+    console.error(
+      "[ig-callback] Profile fetch failed from Meta Graph API:",
       (err as Error).message,
     );
-    if (!igBusinessAccountId) {
-      return redirectForError("profile_fetch_failed");
-    }
+    // Meta Graph API explicitly forbids querying Personal Instagram accounts (/me -> 400 Unsupported request).
+    // Professional SaaS must NOT save a fallback dummy @user_xxxxxx account.
+    return redirectForError("personal_account");
+  }
+
+  // If Meta did not return a real Instagram handle, this is an unverified / personal account
+  if (!username || username.startsWith("user_") || username.startsWith("ig_")) {
+    console.error("[ig-callback] Missing verified username from Meta profile. Rejecting connection:", username);
+    return redirectForError("personal_account");
   }
 
   if (!igBusinessAccountId) {
