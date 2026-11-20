@@ -24,6 +24,7 @@ import {
   Menu,
   ChevronRight,
 } from "lucide-react";
+import { WorkspaceSwitcher, type WorkspaceItem } from "./workspace-switcher";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -36,9 +37,13 @@ const NAV_ITEMS = [
 
 export function DashboardShell({
   user,
+  workspaces,
+  activeWorkspaceId,
   children,
 }: {
   user: User;
+  workspaces: WorkspaceItem[];
+  activeWorkspaceId: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -70,7 +75,7 @@ export function DashboardShell({
 
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger
-            className="inline-flex size-10 items-center justify-center rounded-xl border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex size-10 items-center justify-center rounded-xl border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
             aria-label="Open navigation"
           >
             <Menu className="size-5" />
@@ -82,7 +87,15 @@ export function DashboardShell({
               </SheetTitle>
             </SheetHeader>
 
-            <nav className="flex-1 space-y-1 px-2" aria-label="Dashboard navigation">
+            {/* Mobile Workspace Switcher */}
+            <div className="px-2 py-3 border-b border-border/50">
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+              />
+            </div>
+
+            <nav className="flex-1 space-y-1 px-2 pt-3" aria-label="Dashboard navigation">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
@@ -115,7 +128,7 @@ export function DashboardShell({
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
                   title="Sign out"
                   aria-label="Sign out"
                 >
@@ -128,12 +141,20 @@ export function DashboardShell({
       </header>
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border/60 bg-sidebar md:flex">
+      <aside className="hidden w-[230px] shrink-0 flex-col border-r border-border/60 bg-sidebar md:flex">
         {/* Logo */}
         <div className="flex h-14 items-center border-b border-border/60 px-5">
           <Link href="/dashboard" className="flex items-center">
             <BrandLogo size="default" variant="auto" />
           </Link>
+        </div>
+
+        {/* Workspace Switcher */}
+        <div className="border-b border-border/60 p-2.5">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+          />
         </div>
 
         {/* Nav */}
@@ -168,7 +189,7 @@ export function DashboardShell({
             </span>
             <button
               onClick={handleSignOut}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
               title="Sign out"
               aria-label="Sign out"
             >
