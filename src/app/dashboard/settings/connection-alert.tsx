@@ -8,9 +8,9 @@ const ERROR_MESSAGES: Record<
   { title: string; message: string; variant: "error" | "warning" }
 > = {
   personal_account: {
-    title: "Business or Creator account required",
+    title: "Professional Account Setup Needed",
     message:
-      "Your Instagram account is a Personal account. Please switch it to a Business or Creator account in Instagram Settings → Account → Switch to Professional Account, then try connecting again.",
+      "Meta requires a Professional account. If your account is already Professional, Meta requires linking a Facebook Page (for Business accounts) or switching your account category to Creator (Settings → Account type and tools → Switch to Creator account). Also make sure 'Allow access to messages' is enabled in Message controls.",
     variant: "warning",
   },
   no_facebook_page: {
@@ -53,10 +53,10 @@ const ERROR_MESSAGES: Record<
     variant: "error",
   },
   profile_fetch_failed: {
-    title: "Profile fetch failed",
+    title: "Instagram Connection Incomplete",
     message:
-      "Could not retrieve your Instagram profile. Please ensure your account is a Business or Creator account and try again.",
-    variant: "error",
+      "Meta could not retrieve your account details. If your account is a Business account (e.g. Travel Company), Meta requires either: 1) Switching your account to a Creator account (Settings → Account type and tools → Switch to Creator account, which works directly without a Facebook Page), OR 2) Linking a Facebook Page under Settings → Business tools and controls → Connect a Facebook Page. Also ensure 'Allow access to messages' is enabled.",
+    variant: "warning",
   },
   missing_ig_business_id: {
     title: "Business account not found",

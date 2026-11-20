@@ -8,6 +8,7 @@ import {
   decodeInstagramOAuthState,
   getInstagramRedirectUri,
   getInstagramProfile,
+  fetchIgUserProfile,
   subscribeInstagramWebhooks,
 } from "@/lib/meta/instagram";
 import { encryptToken } from "@/lib/crypto/token";
@@ -167,7 +168,7 @@ export async function GET(request: Request) {
       : "";
   let avatarUrl: string | null = null;
   try {
-    let profile: { id: string; username: string; name?: string; account_type?: string; profile_picture_url?: string };
+    let profile: { id: string; username: string; name?: string; account_type?: string; profile_picture_url?: string } | null = null;
     try {
       profile = await getInstagramProfile(longToken, igUserId);
     } catch (longTokenErr) {
@@ -175,45 +176,72 @@ export async function GET(request: Request) {
         "[ig-callback] Profile fetch with longToken failed, falling back to shortToken:",
         (longTokenErr as Error).message,
       );
-      profile = await getInstagramProfile(shortToken, igUserId);
+      try {
+        profile = await getInstagramProfile(shortToken, igUserId);
+      } catch (shortTokenErr) {
+        console.warn(
+          "[ig-callback] Profile fetch with shortToken failed, trying user node fetch:",
+          (shortTokenErr as Error).message,
+        );
+        try {
+          const userProf = await fetchIgUserProfile(igUserId, longToken);
+          if (userProf.username) {
+            profile = {
+              id: igUserId,
+              username: userProf.username,
+              name: userProf.name,
+              profile_picture_url: userProf.profile_pic,
+              account_type: "BUSINESS",
+            };
+          }
+        } catch {
+          const userProf = await fetchIgUserProfile(igUserId, shortToken);
+          if (userProf.username) {
+            profile = {
+              id: igUserId,
+              username: userProf.username,
+              name: userProf.name,
+              profile_picture_url: userProf.profile_pic,
+              account_type: "BUSINESS",
+            };
+          }
+        }
+      }
     }
 
-    igBusinessAccountId = profile.id || igUserId;
-    if (profile.username && !profile.username.startsWith("user_") && !profile.username.startsWith("ig_")) {
-      username = profile.username;
-    } else if (profile.username) {
-      username = profile.username;
-    }
-    avatarUrl = profile.profile_picture_url ?? null;
-    console.log("[ig-callback:debug] Meta Profile resolved:", {
-      assignedUsername: username,
-      platformAccountId: igBusinessAccountId,
-      accountType: profile.account_type,
-      name: profile.name,
-      hasAvatar: Boolean(avatarUrl),
-    });
+    if (profile) {
+      igBusinessAccountId = profile.id || igUserId;
+      if (profile.username && !profile.username.startsWith("user_") && !profile.username.startsWith("ig_")) {
+        username = profile.username;
+      }
+      avatarUrl = profile.profile_picture_url ?? null;
+      console.log("[ig-callback:debug] Meta Profile resolved:", {
+        assignedUsername: username,
+        platformAccountId: igBusinessAccountId,
+        accountType: profile.account_type,
+        name: profile.name,
+        hasAvatar: Boolean(avatarUrl),
+      });
 
-    if (
-      profile.account_type &&
-      !["BUSINESS", "MEDIA_CREATOR"].includes(profile.account_type.toUpperCase())
-    ) {
-      console.error("[ig-callback] Personal account detected:", profile.account_type);
-      return redirectForError("personal_account");
+      if (
+        profile.account_type &&
+        !["BUSINESS", "MEDIA_CREATOR"].includes(profile.account_type.toUpperCase())
+      ) {
+        console.error("[ig-callback] Personal account detected:", profile.account_type);
+        return redirectForError("personal_account");
+      }
     }
   } catch (err) {
     console.error(
       "[ig-callback] Profile fetch failed from Meta Graph API:",
       (err as Error).message,
     );
-    // Meta Graph API explicitly forbids querying Personal Instagram accounts (/me -> 400 Unsupported request).
-    // Professional SaaS must NOT save a fallback dummy @user_xxxxxx account.
-    return redirectForError("personal_account");
   }
 
-  // If Meta did not return a real Instagram handle, this is an unverified / personal account
+  // If username could not be resolved from profile or OAuth code exchange:
   if (!username || username.startsWith("user_") || username.startsWith("ig_")) {
-    console.error("[ig-callback] Missing verified username from Meta profile. Rejecting connection:", username);
-    return redirectForError("personal_account");
+    console.error("[ig-callback] Could not resolve a verified Instagram username from Meta.");
+    return redirectForError("profile_fetch_failed");
   }
 
   if (!igBusinessAccountId) {

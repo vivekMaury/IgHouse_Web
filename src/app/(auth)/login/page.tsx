@@ -24,6 +24,7 @@ const IG_ERROR_MESSAGES: Record<string, string> = {
   no_facebook_page: "Your Instagram account is not linked to a Facebook Page.",
   instagram_auth_denied: "Instagram login was cancelled or denied. Please try again.",
   token_exchange_failed: "Instagram authentication failed. Please ensure you have a Business or Creator account.",
+  profile_fetch_failed: "Could not retrieve Instagram profile. For Business accounts, please link a Facebook Page, or switch to a Creator account.",
 };
 
 type View = "login" | "forgot" | "forgot-sent";
