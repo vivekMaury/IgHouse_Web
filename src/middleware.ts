@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/signup",
   "/callback",
+  "/invite",
   "/privacy",
   "/terms",
   "/data-deletion",
@@ -18,6 +19,8 @@ const PUBLIC_PATHS = [
 
 function isPublicRoute(path: string): boolean {
   if (PUBLIC_PATHS.includes(path)) return true;
+  if (path.startsWith("/invite")) return true;
+  if (path.startsWith("/api/workspaces/invites/verify")) return true;
   if (path.startsWith("/api/webhooks")) return true;
   if (path.startsWith("/api/meta/data-deletion")) return true;
   if (path.startsWith("/api/instagram/callback")) return true;
@@ -98,7 +101,7 @@ export async function middleware(request: NextRequest) {
 
     if (user && (path === "/login" || path === "/signup")) {
       const destination = sanitizeRedirectPath(
-        request.nextUrl.searchParams.get("next"),
+        request.nextUrl.searchParams.get("next") ?? "/dashboard"
       );
       return NextResponse.redirect(new URL(destination, request.url));
     }
@@ -111,12 +114,11 @@ export async function middleware(request: NextRequest) {
   }
 
   response.headers.set("Content-Security-Policy", csp);
-
   return response;
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|favicon-192.png|favicon-512.png|apple-icon.png|logo.png|logo-dark.png|opengraph-image|twitter-image|robots.txt|sitemap.xml).*)",
   ],
 };
