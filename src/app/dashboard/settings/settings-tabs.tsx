@@ -3,6 +3,8 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { InstagramConnectCard } from "./instagram-connect-card";
 import { DangerZone } from "./danger-zone";
+import { WorkspaceTeam } from "./workspace-team";
+import { type WorkspaceRole } from "@/lib/workspace/rbac";
 
 type ConnectedAccount = {
   id: string;
@@ -20,22 +22,36 @@ type ConnectedAccount = {
 export function SettingsTabs({
   defaultTab,
   accounts,
+  workspaceId,
+  workspaceName,
+  currentUserRole,
+  currentUserId,
 }: {
   defaultTab: "integrations" | "workspace";
   accounts: ConnectedAccount[];
+  workspaceId: string;
+  workspaceName: string;
+  currentUserRole: WorkspaceRole;
+  currentUserId: string;
 }) {
   return (
     <Tabs defaultValue={defaultTab}>
       <TabsList>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
-        <TabsTrigger value="workspace">Workspace</TabsTrigger>
+        <TabsTrigger value="workspace">Workspace & Team</TabsTrigger>
       </TabsList>
 
       <TabsContent value="integrations">
         <InstagramConnectCard accounts={accounts} />
       </TabsContent>
 
-      <TabsContent value="workspace">
+      <TabsContent value="workspace" className="space-y-8 mt-6">
+        <WorkspaceTeam
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          currentUserRole={currentUserRole}
+          currentUserId={currentUserId}
+        />
         <DangerZone />
       </TabsContent>
     </Tabs>
