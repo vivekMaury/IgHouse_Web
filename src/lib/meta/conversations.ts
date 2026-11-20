@@ -1,5 +1,5 @@
 const GRAPH_API_BASE = "https://graph.instagram.com";
-const GRAPH_API_VERSION = "v26.0";
+const GRAPH_API_VERSION = "v22.0";
 
 type IgParticipant = {
   id: string;
