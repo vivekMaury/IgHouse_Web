@@ -25,8 +25,11 @@ function isPublicRoute(path: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://nnfmkhepnddevymtmyss.supabase.co";
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uZm1raGVwbmRkZXZ5bXRteXNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTg5ODQsImV4cCI6MjEwNzk3NDk4NH0.6uEXvHH3A_uzp_HCKm2-f6F0iU0yMBF8Jn3guIRRdYU";
 
   const path = request.nextUrl.pathname;
   const isPublic = isPublicRoute(path);
