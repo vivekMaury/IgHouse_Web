@@ -91,10 +91,12 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      const next = getRedirectPathFromSearch(window.location.search);
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
         },
       });
 
